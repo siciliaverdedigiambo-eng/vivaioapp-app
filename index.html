@@ -199,7 +199,7 @@ function Login({onLogin}){
       h('div',{className:'card',style:{padding:'1.75rem'}},
         step==='email'?h('div',null,
           h('h2',{style:{fontSize:'16px',fontWeight:600,marginBottom:'6px'}},'Accedi al tuo vivaio'),
-          h('p',{style:{fontSize:'13px',color:'#888',marginBottom:'1.25rem'}},'Inserisci l'email con cui ti sei registrato'),
+          h('p',{style:{fontSize:'13px',color:'#888',marginBottom:'1.25rem'}},'Inserisci la tua email aziendale'),
           h('label',{className:'lbl'},'Email aziendale'),
           h('input',{type:'email',value:email,onChange:e=>setEmail(e.target.value),placeholder:'es. info@miovivaio.it',style:{marginBottom:'1rem'},onKeyDown:e=>e.key==='Enter'&&checkEmail()}),
           err&&h('p',{style:{color:'#A32D2D',fontSize:'13px',marginBottom:'12px'}},err),
