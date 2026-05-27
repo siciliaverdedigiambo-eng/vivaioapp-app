@@ -91,7 +91,7 @@ let currentTab = 'clienti';
 
 // ── DB ──
 async function sbGet(t, extra=''){
-  const r = await fetch(SB+'/rest/v1/'+t+'?order=%22createdAt%22.desc'+extra, {headers:SBH});
+  const r = await fetch(SB+'/rest/v1/'+t+'?order=id.asc'+extra, {headers:SBH});
   const data = await r.json();
   return Array.isArray(data) ? data : [];
 }
