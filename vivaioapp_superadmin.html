@@ -107,10 +107,11 @@ async function sbDel(t,id){
 function gid(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
 
 async function loadData(){
+  render(); // show loading state first
   [tenants, utenti, codici] = await Promise.all([
     sbGet('tenants'), sbGet('utenti'), sbGet('codici_sconto')
   ]);
-  render();
+  render(); // re-render with data
 }
 
 // ── AUTH ──
@@ -192,6 +193,10 @@ function switchTab(tab){
 
 // ── TAB CLIENTI ──
 function renderClienti(){
+  if(!tenants.length && authed){
+    document.getElementById('tab-content').innerHTML = '<div style="text-align:center;padding:3rem;color:#aaa">Caricamento clienti...</div>';
+    return;
+  }
   const rows = tenants.map(t=>{
     const nU = utenti.filter(u=>u.tenantId===t.id).length;
     const trialEnd = new Date(t.trialEndsAt);
