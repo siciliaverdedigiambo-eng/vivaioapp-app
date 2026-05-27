@@ -91,8 +91,9 @@ let currentTab = 'clienti';
 
 // ── DB ──
 async function sbGet(t, extra=''){
-  const r = await fetch(SB+'/rest/v1/'+t+'?order=createdAt.desc'+extra, {headers:SBH});
-  return r.json();
+  const r = await fetch(SB+'/rest/v1/'+t+'?order=%22createdAt%22.desc'+extra, {headers:SBH});
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
 }
 async function sbIns(t,d){
   const r = await fetch(SB+'/rest/v1/'+t, {method:'POST',headers:SBH,body:JSON.stringify(d)});
@@ -108,9 +109,12 @@ function gid(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
 
 async function loadData(){
   render(); // show loading state first
-  [tenants, utenti, codici] = await Promise.all([
+  const results = await Promise.all([
     sbGet('tenants'), sbGet('utenti'), sbGet('codici_sconto')
   ]);
+  tenants = Array.isArray(results[0]) ? results[0] : [];
+  utenti  = Array.isArray(results[1]) ? results[1] : [];
+  codici  = Array.isArray(results[2]) ? results[2] : [];
   render(); // re-render with data
 }
 
