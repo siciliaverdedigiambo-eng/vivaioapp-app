@@ -242,13 +242,7 @@ function Login({onLogin}){
   return h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',padding:'1.5rem',background:'#f3f4f2'}},
     h('div',{style:{width:'100%',maxWidth:'380px'}},
       h('div',{style:{textAlign:'center',marginBottom:'2rem'}},
-        h('div',{style:{background:'linear-gradient(135deg,#2a5009,#3B6D11)',borderRadius:'14px',padding:'22px 32px',display:'inline-flex',flexDirection:'column',alignItems:'center',gap:'6px',minWidth:'190px',boxShadow:'0 4px 20px rgba(59,109,17,0.3)'}},
-        h('div',{style:{display:'flex',alignItems:'baseline',gap:'1px'}},
-          h('span',{style:{fontSize:'32px',fontWeight:800,color:'#fff',letterSpacing:'-1px',lineHeight:1,fontFamily:'system-ui,sans-serif'}},'Vivaio'),
-          h('span',{style:{fontSize:'32px',fontWeight:800,color:'#A8D96E',letterSpacing:'-1px',lineHeight:1,fontFamily:'system-ui,sans-serif'}},'App')
-        ),
-        h('span',{style:{fontSize:'10px',color:'rgba(255,255,255,0.65)',letterSpacing:'2px',textTransform:'uppercase',fontWeight:500,fontFamily:'system-ui,sans-serif'}},'Gestisci · Cresci · Fiorisci')
-      ),
+        h('img',{src:'vivaioapp-logo.svg',alt:'VivaioApp',style:{width:'180px',height:'180px',objectFit:'contain',display:'block',margin:'0 auto'}}),
         h('p',{style:{fontSize:'13px',color:'#999',marginTop:'6px'}},'Gestionale aziendale')
       ),
       h('div',{className:'card',style:{padding:'1.75rem'}},
