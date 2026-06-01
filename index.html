@@ -2087,7 +2087,7 @@ function App(){
 
   // Auto-refresh lavorazioni ogni 60s quando l'admin è loggato
   // Auto-refresh for all users every 30s
-  const lastReminderRef=useRef(0);
+  const lastReminderRef=useRef(Date.now());
   useEffect(()=>{
     if(!user)return;
     const t=setInterval(()=>{
