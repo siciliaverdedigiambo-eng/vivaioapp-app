@@ -381,11 +381,6 @@ function CentriTab({data,save}){
         h('label',{className:'lbl'},'Nome settore *'),
         h('input',{value:form.nome||'',onChange:F('nome'),style:{marginBottom:'14px'}}),
 
-        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}},
-          h('div',null,h('label',{className:'lbl'},'Data entrata partita'),h('input',{type:'date',value:form.dataEntrata||'',onChange:F('dataEntrata')})),
-          h('div',null,h('label',{className:'lbl'},'Fornitore'),h('input',{value:form.fornitore||'',onChange:F('fornitore'),placeholder:'Nome fornitore'}))
-        ),
-
         h('label',{className:'lbl'},'Varietà di piante'),
         h('div',{style:{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'8px'}},
           (form.varieta||[]).map((v,i)=>h('div',{key:i,style:{background:'#f9f9f7',borderRadius:'10px',padding:'10px',border:'1px solid #e5e5e5',position:'relative'}},
