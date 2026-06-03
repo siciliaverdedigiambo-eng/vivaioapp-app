@@ -319,7 +319,7 @@ async function completa(){
 
     // Invia email di benvenuto con credenziali
     try{
-      await fetch(SB+'/functions/v1/send-welcome-email',{
+      await fetch(SB+'/functions/v1/dynamic-endpoint',{
         method:'POST',
         headers:{
           'Content-Type':'application/json',
