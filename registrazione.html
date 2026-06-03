@@ -321,7 +321,10 @@ async function completa(){
     try{
       await fetch(SB+'/functions/v1/send-welcome-email',{
         method:'POST',
-        headers:{...SBH,'Content-Type':'application/json'},
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization':'Bearer '+KEY
+        },
         body:JSON.stringify({
           tenantNome: formData.nome,
           username: formData.username,
