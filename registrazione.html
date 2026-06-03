@@ -317,6 +317,23 @@ async function completa(){
       });
     }
 
+    // Invia email di benvenuto con credenziali
+    try{
+      await fetch(SB+'/functions/v1/send-welcome-email',{
+        method:'POST',
+        headers:{...SBH,'Content-Type':'application/json'},
+        body:JSON.stringify({
+          tenantNome: formData.nome,
+          username: formData.username,
+          password: formData.password,
+          piano: formData.piano
+        })
+      });
+    } catch(emailErr){
+      console.warn('Email non inviata:', emailErr);
+      // Non blocchiamo la registrazione se l'email fallisce
+    }
+
     step = 'done';
     render();
 
