@@ -1499,6 +1499,7 @@ function AdminApp({data,save,user,logout,refresh}){
             {id:'dip',       icon:'👷', label:'Dipendenti',            sub:'Anagrafica personale'},
             {id:'tipi',      icon:'🔧', label:'Tipi lavorazione',      sub:'Configura tipi'},
             {id:'utenti',    icon:'👤', label:'Utenti e responsabili', sub:'Gestisci accessi'},
+            {id:'impostazioni', icon:'⚙️', label:'Impostazioni account', sub:'Password e Telegram'},
           ].map(item=>h('button',{key:item.id,onClick:()=>changeTab(item.id),className:'card',
             style:{display:'flex',alignItems:'center',gap:'12px',border:'none',cursor:'pointer',textAlign:'left',WebkitTapHighlightColor:'transparent',width:'100%'}},
             h('span',{style:{fontSize:'26px',flexShrink:0}},item.icon),
@@ -1512,12 +1513,12 @@ function AdminApp({data,save,user,logout,refresh}){
       ),
 
       // SUB-TABS (con back button)
-      ['inserisci','completate','tutte','report','centri','dip','tipi','utenti'].includes(tab)&&h('div',null,
+      ['inserisci','completate','tutte','report','centri','dip','tipi','utenti','impostazioni'].includes(tab)&&h('div',null,
         h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'1rem'}},
           h('button',{onClick:()=>changeTab('altro'),style:{background:'transparent',border:'none',fontSize:'24px',cursor:'pointer',color:'#3B6D11',padding:'0 4px'}},'‹'),
           h('h3',{style:{fontSize:'15px',fontWeight:500}},{
             inserisci:'Inserisci lavorazione',completate:'Completate',tutte:'Tutte le lavorazioni',
-            report:'Report',centri:'Centri & Settori',dip:'Dipendenti',tipi:'Tipi lavorazione',utenti:'Utenti'
+            report:'Report',centri:'Centri & Settori',dip:'Dipendenti',tipi:'Tipi lavorazione',utenti:'Utenti',impostazioni:'Impostazioni account'
           }[tab]||tab)
         ),
         ['completate','tutte'].includes(tab)&&centroFilter,
@@ -1528,7 +1529,8 @@ function AdminApp({data,save,user,logout,refresh}){
         tab==='centri'&&h(CentriTab,{data,save}),
         tab==='dip'&&h(DipendentiTab,{data,save}),
         tab==='tipi'&&h(TipiTab,{data,save}),
-        tab==='utenti'&&h(UtentiTab,{data,save})
+        tab==='utenti'&&h(UtentiTab,{data,save}),
+            tab==='impostazioni'&&h(ImpostazioniTab,{user,data,save})
       )
     ),
 
@@ -2010,7 +2012,8 @@ function RespApp({data,save,user,logout}){
       tab==='altro'&&h('div',{style:{display:'flex',flexDirection:'column',gap:'10px'}},
         [{id:'settori',icon:'🌱',label:'Settori del centro'},
          {id:'completate',icon:'📂',label:'Lavorazioni completate'},
-         {id:'report',icon:'📊',label:'Report e statistiche'}
+         {id:'report',icon:'📊',label:'Report e statistiche'},
+         {id:'impostazioni',icon:'⚙️',label:'Impostazioni account'}
         ].map(item=>h('button',{key:item.id,onClick:()=>changeTab(item.id),className:'card',
           style:{display:'flex',alignItems:'center',gap:'14px',border:'none',cursor:'pointer',textAlign:'left',WebkitTapHighlightColor:'transparent'}},
           h('span',{style:{fontSize:'28px'}}),item.icon,
@@ -2020,14 +2023,15 @@ function RespApp({data,save,user,logout}){
       ),
 
       // TAB: SETTORI, COMPLETATE, REPORT (con back)
-      ['settori','completate','report'].includes(tab)&&h('div',null,
+      ['settori','completate','report','impostazioni'].includes(tab)&&h('div',null,
         h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'1rem'}},
           h('button',{onClick:()=>changeTab('altro'),style:{background:'transparent',border:'none',fontSize:'24px',cursor:'pointer',color:'#3B6D11'}},'‹'),
-          h('h3',{style:{fontSize:'15px',fontWeight:500}},tab==='settori'?'Settori':tab==='completate'?'Completate':'Report')
+          h('h3',{style:{fontSize:'15px',fontWeight:500}},tab==='settori'?'Settori':tab==='completate'?'Completate':tab==='report'?'Report':'Impostazioni account')
         ),
         tab==='settori'&&h(RespSettoriTab,{data,save,centroId:selId}),
         tab==='completate'&&h(CompletateTab,{data,save,centroId:selId}),
-        tab==='report'&&h(ReportTab,{data,centroId:selId})
+        tab==='report'&&h(ReportTab,{data,centroId:selId}),
+        tab==='impostazioni'&&h(ImpostazioniTab,{user,data,save})
       )
     ),
 
@@ -2254,6 +2258,66 @@ ${lines}
     }
   });
 })();
+
+function ImpostazioniTab({user,data,save}){
+  const [nuovaPass,setNuovaPass]=React.useState('');
+  const [confermaPass,setConfermaPass]=React.useState('');
+  const [chatId,setChatId]=React.useState(user.chatId||'');
+  const [okMsg,setOkMsg]=React.useState('');
+  const [errMsg,setErrMsg]=React.useState('');
+
+  const salvaPassword=async()=>{
+    setOkMsg('');setErrMsg('');
+    if(!nuovaPass.trim()){setErrMsg('Inserisci la nuova password.');return;}
+    if(nuovaPass!==confermaPass){setErrMsg('Le password non coincidono.');return;}
+    if(nuovaPass.length<6){setErrMsg('La password deve essere di almeno 6 caratteri.');return;}
+    const utenti=(data.utenti||[]).map(u=>u.id===user.id?{...u,pass:nuovaPass}:u);
+    await save({...data,utenti});
+    setNuovaPass('');setConfermaPass('');
+    setOkMsg('Password aggiornata con successo!');
+  };
+
+  const salvaChatId=async()=>{
+    setOkMsg('');setErrMsg('');
+    if(!chatId.trim()){setErrMsg('Inserisci il tuo Chat ID Telegram.');return;}
+    const utenti=(data.utenti||[]).map(u=>u.id===user.id?{...u,chatId:chatId.trim()}:u);
+    await save({...data,utenti});
+    setOkMsg('Chat ID Telegram salvato!');
+  };
+
+  return h('div',{style:{display:'flex',flexDirection:'column',gap:'16px'}},
+    h('div',{className:'card',style:{padding:'16px'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px'}},
+        h('span',{style:{fontSize:'20px'}},'🔑'),
+        h('span',{style:{fontWeight:600,fontSize:'15px'}},'Cambia password')
+      ),
+      h('label',{className:'lbl'},'Nuova password'),
+      h('input',{type:'password',value:nuovaPass,onChange:e=>setNuovaPass(e.target.value),
+        placeholder:'Minimo 6 caratteri',style:{marginBottom:'10px'}}),
+      h('label',{className:'lbl'},'Conferma password'),
+      h('input',{type:'password',value:confermaPass,onChange:e=>setConfermaPass(e.target.value),
+        placeholder:'Ripeti la password',style:{marginBottom:'12px'}}),
+      h('button',{className:'btn-g',onClick:salvaPassword,style:{width:'100%'}},'Aggiorna password')
+    ),
+    h('div',{className:'card',style:{padding:'16px'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'}},
+        h('span',{style:{fontSize:'20px'}},'✈️'),
+        h('span',{style:{fontWeight:600,fontSize:'15px'}},'Notifiche Telegram')
+      ),
+      h('p',{style:{fontSize:'12px',color:'#888',marginBottom:'10px',lineHeight:'1.5'}},
+        'Per ricevere notifiche su Telegram, cerca ',h('b',null,'@vivaioapp_bot'),
+        ' su Telegram, avvia la chat con /start e copia qui il tuo Chat ID.'
+      ),
+      h('label',{className:'lbl'},'Il tuo Chat ID Telegram'),
+      h('input',{type:'text',value:chatId,onChange:e=>setChatId(e.target.value),
+        placeholder:'Es. 123456789',style:{marginBottom:'12px'}}),
+      h('button',{className:'btn-g',onClick:salvaChatId,style:{width:'100%'}},'Salva Chat ID')
+    ),
+    okMsg&&h('div',{style:{background:'#e8f5e0',color:'#2d6a1a',padding:'10px 14px',borderRadius:'8px',fontSize:'13px',fontWeight:500}},'✅ '+okMsg),
+    errMsg&&h('div',{style:{background:'#ffeaea',color:'#c0392b',padding:'10px 14px',borderRadius:'8px',fontSize:'13px',fontWeight:500}},'⚠️ '+errMsg)
+  );
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(h(App,null));
 </script>
 </body>
