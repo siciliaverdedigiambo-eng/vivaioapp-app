@@ -95,8 +95,8 @@ const h = React.createElement;
 const SB   = 'https://ikxhdmxjvodcyypnmsuh.supabase.co';
 const KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlreGhkbXhqdm9kY3l5cG5tc3VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3ODk3MTYsImV4cCI6MjA5NTM2NTcxNn0.KEtZDskCrvmE4K2EOzqYXRq12bvligwhRLnoeeR6X5Q';
 const SBH  = {'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':'return=representation'};
-const TG_BOT= '8667632385:AAGTi_OXc58JxSNqL5Unlrl22ip3vcE64PM';
-const TG_PROXY = SB+'/functions/v1/telegram-proxy';
+// Token bot gestiti server-side tramite Supabase Secrets
+const TG_PROXY = SB+'/functions/v1/super-responder';
 const Badge = ({c,children}) => h('span',{className:'badge b'+c},children);
 function gid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
 
@@ -118,12 +118,12 @@ async function sbDel(tbl,id){
 }
 
 // ── TELEGRAM ──
-async function tgSend(chatId,text){
+async function tgSend(chatId,text,botName='vivaioapp'){
   if(!chatId) return;
   try{
     await fetch(TG_PROXY,{method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},
-      body:JSON.stringify({token:TG_BOT,chat_id:chatId,text})});
+      body:JSON.stringify({botName,chat_id:chatId,text})});
   }catch(e){ console.error('TG',e); }
 }
 async function notifyResponsabili(centroId,msg,data){
@@ -213,26 +213,10 @@ function Login({onLogin}){
       const trialEnd = new Date(tenant.trialEndsAt);
       const daysLeft = Math.ceil((trialEnd - new Date())/(1000*60*60*24));
       if(daysLeft <= 2 && daysLeft > 0){
-        fetch('https://ikxhdmxjvodcyypnmsuh.supabase.co/functions/v1/telegram-proxy',{
-          method:'POST',
-          headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlreGhkbXhqdm9kY3l5cG5tc3VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3ODk3MTYsImV4cCI6MjA5NTM2NTcxNn0.KEtZDskCrvmE4K2EOzqYXRq12bvligwhRLnoeeR6X5Q','apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlreGhkbXhqdm9kY3l5cG5tc3VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3ODk3MTYsImV4cCI6MjA5NTM2NTcxNn0.KEtZDskCrvmE4K2EOzqYXRq12bvligwhRLnoeeR6X5Q'},
-          body:JSON.stringify({
-            token:'8667632385:AAGTi_OXc58JxSNqL5Unlrl22ip3vcE64PM',
-            chat_id:616409100,
-            text:'⏰ <b>Trial in scadenza</b>\n\n🌿 Vivaio: <b>'+tenant.nome+'</b>\n📧 Email: '+tenant.email+'\n⏳ Scade tra: <b>'+daysLeft+' giorn'+(daysLeft===1?'o':'i')+'</b>\n\n👉 Contattalo per convertirlo!'
-          })
-        }).catch(()=>{});
+        tgSend(616409100,'⏰ <b>Trial in scadenza</b>\n\n🌿 Vivaio: <b>'+tenant.nome+'</b>\n📧 Email: '+tenant.email+'\n⏳ Scade tra: <b>'+daysLeft+' giorn'+(daysLeft===1?'o':'i')+'</b>\n\n👉 Contattalo per convertirlo!').catch(()=>{});
       }
       if(daysLeft <= 0){
-        fetch('https://ikxhdmxjvodcyypnmsuh.supabase.co/functions/v1/telegram-proxy',{
-          method:'POST',
-          headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlreGhkbXhqdm9kY3l5cG5tc3VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3ODk3MTYsImV4cCI6MjA5NTM2NTcxNn0.KEtZDskCrvmE4K2EOzqYXRq12bvligwhRLnoeeR6X5Q','apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlreGhkbXhqdm9kY3l5cG5tc3VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3ODk3MTYsImV4cCI6MjA5NTM2NTcxNn0.KEtZDskCrvmE4K2EOzqYXRq12bvligwhRLnoeeR6X5Q'},
-          body:JSON.stringify({
-            token:'8667632385:AAGTi_OXc58JxSNqL5Unlrl22ip3vcE64PM',
-            chat_id:616409100,
-            text:'🔴 <b>Trial SCADUTO</b>\n\n🌿 Vivaio: <b>'+tenant.nome+'</b>\n📧 Email: '+tenant.email+'\n\n👉 Contattalo subito o disattiva l\'account dal super admin.'
-          })
-        }).catch(()=>{});
+        tgSend(616409100,'🔴 <b>Trial SCADUTO</b>\n\n🌿 Vivaio: <b>'+tenant.nome+'</b>\n📧 Email: '+tenant.email+'\n\n👉 Contattalo subito o disattiva l\'account dal super admin.').catch(()=>{});
       }
       onLogin(u);
     } catch{ setErr('Errore di rete. Riprova.'); }
@@ -2160,6 +2144,16 @@ ${lines}
       createdBy:item.createdBy||'',
       rispostaAt:item.rispostaAt||null
     };
+    if(tbl==='settori')return{
+      id:item.id,
+      centroId:item.centroId||'',
+      nome:item.nome||'',
+      capacita:parseInt(item.capacita)||0,
+      varieta:item.varieta||[],
+      lunghezza:item.lunghezza?parseFloat(item.lunghezza):null,
+      larghezza:item.larghezza?parseFloat(item.larghezza):null,
+      note:item.note||''
+    };
     return item;
   }
   async function save(newData){
@@ -2262,7 +2256,7 @@ ${lines}
 function ImpostazioniTab({user,data,save}){
   const [nuovaPass,setNuovaPass]=React.useState('');
   const [confermaPass,setConfermaPass]=React.useState('');
-  const [chatId,setChatId]=React.useState(user.chatId||'');
+  const [chatId,setChatId]=React.useState(user.tgChatId||'');
   const [okMsg,setOkMsg]=React.useState('');
   const [errMsg,setErrMsg]=React.useState('');
 
@@ -2280,7 +2274,7 @@ function ImpostazioniTab({user,data,save}){
   const salvaChatId=async()=>{
     setOkMsg('');setErrMsg('');
     if(!chatId.trim()){setErrMsg('Inserisci il tuo Chat ID Telegram.');return;}
-    const utenti=(data.utenti||[]).map(u=>u.id===user.id?{...u,chatId:chatId.trim()}:u);
+    const utenti=(data.utenti||[]).map(u=>u.id===user.id?{...u,tgChatId:chatId.trim()}:u);
     await save({...data,utenti});
     setOkMsg('Chat ID Telegram salvato!');
   };
