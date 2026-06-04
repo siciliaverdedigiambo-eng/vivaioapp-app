@@ -2154,6 +2154,24 @@ ${lines}
       larghezza:item.larghezza?parseFloat(item.larghezza):null,
       note:item.note||''
     };
+    if(tbl==='utenti')return{
+      id:item.id,
+      nome:item.nome||'',
+      username:item.user||item.username||'',
+      pass:item.pass||'',
+      ruolo:item.ruolo||'responsabile',
+      centroIds:item.centroIds||[]
+    };
+    if(tbl==='centri')return{
+      id:item.id,
+      nome:item.nome||''
+    };
+    if(tbl==='dipendenti')return{
+      id:item.id,
+      cognome:item.cognome||'',
+      nome:item.nome||'',
+      sesso:item.sesso||'UOMO'
+    };
     return item;
   }
   async function save(newData){
