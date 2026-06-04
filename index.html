@@ -2037,7 +2037,7 @@ function App(){
   useEffect(()=>{
     if(!user||!user.tenant){setLoading(false);return;}
     const _t=user.tenant.id;
-    Promise.all([sbGet('centri',_t),sbGet('settori',_t),sbGet('dipendenti',_t),sbGet('tipi',_t),sbGet('utenti',_t),sbGet('lavorazioni',_t),sbGet('richieste',_t)]).then(([centri,settori,dipendenti,tipi,utenti,lavorazioni,richieste])=>{
+    Promise.all([sbGet('centri','tenantId=eq.'+_t),sbGet('settori','tenantId=eq.'+_t),sbGet('dipendenti','tenantId=eq.'+_t),sbGet('tipi','tenantId=eq.'+_t),sbGet('utenti','tenantId=eq.'+_t),sbGet('lavorazioni','tenantId=eq.'+_t),sbGet('richieste','tenantId=eq.'+_t)]).then(([centri,settori,dipendenti,tipi,utenti,lavorazioni,richieste])=>{
         const normSett=settori.map(s=>({...s,varieta:(s.varieta||[]).map(v=>({nome:v.nome||'',quantita:v.quantita||0,vaso:v.vaso||'',fornitore:v.fornitore||'',dataEntrata:v.dataEntrata||''})),note:s.note||'',lunghezza:s.lunghezza||null,larghezza:s.larghezza||null}));
         settori=normSett;
         const normLav=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta',varietaId:l.varietaId||''}));
