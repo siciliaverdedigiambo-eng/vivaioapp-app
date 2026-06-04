@@ -743,8 +743,6 @@ function ProposteTab({data,save,centroId,user}){
     setSaving(true);
     const updated={...form,data:form.dataConferma,stato:'confermata',confermataAt:new Date().toISOString()};
     await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===form.id?updated:l)});
-
-    // Notifica Telegram ai responsabili del centro
     setSaving(false);close();
   };
 
@@ -780,7 +778,7 @@ function ProposteTab({data,save,centroId,user}){
               h('td',{style:{fontSize:'12px',color:'#666'}},l.quantita||'—'),
               h('td',{style:{fontSize:'12px',color:'#666',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},l.note||'—'),
               h('td',null,h('div',{style:{display:'flex',gap:'4px'}},
-                h('button',{onClick:()=>openConferma(l),className:'btn-g sm',title:'Conferma e notifica'},'✓ Conferma'),
+                h('button',{onClick:()=>openConferma(l),className:'btn-g sm',title:'Conferma proposta'},'✓ Conferma'),
                 h('button',{onClick:()=>del(l.id),className:'btn-r sm'},'🗑')
               ))
             );
@@ -788,7 +786,7 @@ function ProposteTab({data,save,centroId,user}){
         )
       ),
     modal&&h(Modal,{title:'Conferma lavorazione',onClose:close},
-      h('div',{style:{background:'#EAF3DE',borderRadius:'8px',padding:'10px 14px',marginBottom:'14px',fontSize:'13px',color:'#27500A'}},'Confermando, il responsabile riceverà una notifica su Telegram con tutti i dettagli.'),
+      h('div',{style:{background:'#EAF3DE',borderRadius:'8px',padding:'10px 14px',marginBottom:'14px',fontSize:'13px',color:'#27500A'}},'Indica la data in cui verrà eseguita la lavorazione. La proposta passerà allo stato "Confermata".'),
       h('label',{className:'lbl'},'📅 Data in cui si farà la lavorazione *'),
       h('input',{type:'date',value:form.dataConferma||'',onChange:e=>setForm(f=>({...f,dataConferma:e.target.value})),style:{marginBottom:'12px',...(!form.dataConferma?{borderColor:'#F7C1C1'}:{})}}),
       h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}},
@@ -814,7 +812,7 @@ function ProposteTab({data,save,centroId,user}){
       h('label',{className:'lbl'},'Note aggiuntive'),
       h('textarea',{value:form.note||'',onChange:F('note'),rows:2,style:{marginBottom:'1rem'}}),
       h('div',{style:{display:'flex',gap:'10px'}},
-        h('button',{onClick:conferma,className:'btn-g',style:{flex:1,minWidth:'160px'},disabled:saving},saving?'Invio notifica...':'✓ Conferma e notifica'),
+        h('button',{onClick:conferma,className:'btn-g',style:{flex:1,minWidth:'160px'},disabled:saving},saving?'Salvataggio...':'✓ Conferma'),
         h('button',{onClick:close,className:'btn-n'},'Annulla')
       )
     )
@@ -2088,14 +2086,21 @@ ${lines}
   },[user]);
 
   function sanitize(tbl,item){
-    if(tbl==='lavorazioni')return{...item,
+    if(tbl==='lavorazioni')return{
+      id:item.id,
+      centroId:item.centroId||'',
+      settoreId:item.settoreId||'',
+      tipoId:item.tipoId||'',
+      varietaId:item.varietaId||'',
       data:item.data||null,
       ore:item.ore!=null&&item.ore!==''?parseFloat(item.ore):null,
-      dipendentiIds:item.dipendentiIds||[],
       oreMap:item.oreMap||{},
+      dipendentiIds:item.dipendentiIds||[],
       priorita:item.priorita||'',
       stato:item.stato||'proposta',
-      varietaId:item.varietaId||''
+      quantita:item.quantita||'',
+      note:item.note||'',
+      confermataAt:item.confermataAt||null
     };
     if(tbl==='richieste')return{...item,
       dataRichiesta:item.dataRichiesta||null,
