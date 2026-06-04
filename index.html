@@ -128,7 +128,7 @@ async function tgSend(chatId,text,botName='vivaioapp'){
 }
 async function notifyResponsabili(centroId,msg,data){
   const uu = (data.utenti||[]).filter(u=>u.ruolo!=='admin'&&(u.centroIds||[]).includes(centroId));
-  for(const u of uu){ const cid=u.tgChatId||u.tgchatid; if(cid) await tgSend(cid,msg); }
+  for(const u of uu){ if(u.tgChatId) await tgSend(u.tgChatId,msg); }
 }
 
 // ── UI COMPONENTS ──
@@ -176,28 +176,37 @@ function TopBar({title,user,logout,extra}){
 
 // ── LOGIN ──
 function Login({onLogin}){
+  const [email,setEmail]    = useState('');
   const [uname,setUname]    = useState('');
   const [pass,setPass]      = useState('');
   const [err,setErr]        = useState('');
   const [busy,setBusy]      = useState(false);
+  const [step,setStep]      = useState('email');
+  const [tname,setTname]    = useState('');
 
-  const checkEmail = async () => {}; // legacy stub
+  const checkEmail = async () => {
+    if(!email.trim()){ setErr('Inserisci la tua email.'); return; }
+    setBusy(true); setErr('');
+    try {
+      const r = await fetch(SB+'/rest/v1/tenants?email=eq.'+encodeURIComponent(email.trim().toLowerCase()),{headers:SBH});
+      const list = await r.json();
+      if(!list||!list.length){ setErr('Nessun account trovato. Contatta VivaioApp.'); setBusy(false); return; }
+      if(!list[0].attivo){ setErr('Account sospeso. Contatta VivaioApp.'); setBusy(false); return; }
+      sessionStorage.setItem('va_tenant',JSON.stringify(list[0]));
+      setTname(list[0].nome||'');
+      setStep('pass');
+    } catch{ setErr('Errore di rete. Riprova.'); }
+    setBusy(false);
+  };
 
   const doLogin = async () => {
     if(!uname.trim()||!pass.trim()){ setErr('Inserisci username e password.'); return; }
     setBusy(true); setErr('');
     try {
-      // Cerca l'utente per username in tutti i tenant
-      const r = await fetch(SB+'/rest/v1/utenti?username=eq.'+encodeURIComponent(uname.trim()),{headers:SBH});
+      const tenant = JSON.parse(sessionStorage.getItem('va_tenant')||'{}');
+      const r = await fetch(SB+'/rest/v1/utenti?tenantId=eq.'+tenant.id+'&username=eq.'+encodeURIComponent(uname.trim()),{headers:SBH});
       const list = await r.json();
       if(!list||!list.length||list[0].pass!==pass){ setErr('Credenziali non valide.'); setBusy(false); return; }
-      // Carica il tenant associato
-      const rt = await fetch(SB+'/rest/v1/tenants?id=eq.'+list[0].tenantId,{headers:SBH});
-      const tenants = await rt.json();
-      if(!tenants||!tenants.length){ setErr('Account non trovato. Contatta VivaioApp.'); setBusy(false); return; }
-      const tenant = tenants[0];
-      if(!tenant.attivo){ setErr('Account sospeso. Contatta VivaioApp.'); setBusy(false); return; }
-      sessionStorage.setItem('va_tenant',JSON.stringify(tenant));
       const u = Object.assign({},list[0],{tenant});
       try{ sessionStorage.setItem('va_user',JSON.stringify(u)); }catch{}
       // Notify super-admin if trial expiring soon
@@ -221,9 +230,25 @@ function Login({onLogin}){
         h('p',{style:{fontSize:'13px',color:'#999',marginTop:'6px'}},'Gestionale aziendale')
       ),
       h('div',{className:'card',style:{padding:'1.75rem'}},
-        h('div',null,
+        step==='email' ? h('div',null,
           h('h2',{style:{fontSize:'16px',fontWeight:600,marginBottom:'4px'}},'Accedi al tuo vivaio'),
-          h('p',{style:{fontSize:'13px',color:'#888',marginBottom:'1.25rem'}},'Inserisci username e password'),
+          h('p',{style:{fontSize:'13px',color:'#888',marginBottom:'1.25rem'}},'Inserisci la tua email aziendale'),
+          h('label',{className:'lbl'},'Email'),
+          h('input',{type:'email',value:email,onChange:e=>setEmail(e.target.value),
+            placeholder:'info@miovivaio.it',style:{marginBottom:'1rem'},
+            onKeyDown:e=>e.key==='Enter'&&checkEmail()}),
+          err&&h('p',{style:{color:'#A32D2D',fontSize:'13px',marginBottom:'12px'}},err),
+          h('button',{onClick:checkEmail,className:'btn-g',style:{width:'100%'},disabled:busy},busy?'Verifica...':'Continua')
+        ) : h('div',null,
+          h('div',{style:{background:'#EAF3DE',borderRadius:'8px',padding:'10px 12px',marginBottom:'1.25rem',display:'flex',alignItems:'center',gap:'10px'}},
+            h('span',{}, '🏢'),
+            h('div',null,
+              h('div',{style:{fontWeight:500,fontSize:'13px'}},tname),
+              h('div',{style:{fontSize:'11px',color:'#888'}},email)
+            ),
+            h('button',{onClick:()=>{setStep('email');setErr('');setUname('');setPass('');setTname('');sessionStorage.removeItem('va_tenant');},
+              style:{marginLeft:'auto',background:'transparent',border:'none',color:'#3B6D11',cursor:'pointer',fontSize:'12px'}},'Cambia')
+          ),
           h('label',{className:'lbl'},'Username'),
           h('input',{value:uname,onChange:e=>setUname(e.target.value),style:{marginBottom:'12px'},
             onKeyDown:e=>e.key==='Enter'&&doLogin()}),
@@ -683,7 +708,7 @@ function PrioDot({value,onChange}){
 }
 
 /* ── PROPOSTE TAB (admin vede tutte le proposte dei responsabili) ── */
-function ProposteTab({data,save,centroId}){
+function ProposteTab({data,save,centroId,user}){
   const [modal,setModal]=useState(false);
   const [form,setForm]=useState({});
   const [saving,setSaving]=useState(false);
@@ -720,22 +745,6 @@ function ProposteTab({data,save,centroId}){
     await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===form.id?updated:l)});
 
     // Notifica Telegram ai responsabili del centro
-    const centro=(data.centri||[]).find(x=>x.id===form.centroId);
-    const settore=(data.settori||[]).find(x=>x.id===form.settoreId);
-    const tipo=(data.tipi||[]).find(x=>x.id===form.tipoId);
-    const nomi=(form.dipendentiIds||[]).map(id=>{const d=(data.dipendenti||[]).find(x=>x.id===id);return d?d.cognome+' '+(d.nome||''):'?';}).join(', ');
-    const pLab={alta:'🔴 ALTA',media:'🟡 MEDIA',bassa:'🟢 BASSA','':''}[form.priorita||''];
-    const msg=`🌿 <b>${user.tenant.nome} — Lavorazione confermata ✅</b>\n\n`+
-      `📍 <b>Centro:</b> ${centro?.nome||'—'}\n`+
-      `🌱 <b>Settore:</b> ${settore?.nome||'—'}\n`+
-      `🔧 <b>Tipo:</b> ${tipo?.nome||'—'}\n`+
-      `📅 <b>Data:</b> ${form.dataConferma}\n`+
-      (nomi?`👷 <b>Dipendenti:</b> ${nomi}\n`:'')+
-      (pLab?`⚡ <b>Priorità:</b> ${pLab}\n`:'')+
-      (form.quantita?`📦 <b>Quantità:</b> ${form.quantita}\n`:'')+
-      (form.note?`📝 <b>Note:</b> ${form.note}\n`:'');
-    await notifyResponsabili(form.centroId, msg, data);
-
     setSaving(false);close();
   };
 
@@ -1426,7 +1435,7 @@ function AdminApp({data,save,user,logout,refresh}){
       // TAB PROPOSTE
       tab==='proposte'&&h('div',null,
         centroFilter,
-        h(ProposteTab,{key:'prop_'+selCentroAdmin,data,save,centroId})
+        h(ProposteTab,{key:'prop_'+selCentroAdmin,data,save,centroId,user})
       ),
 
       // TAB RICHIESTE
@@ -1562,9 +1571,7 @@ function RichiesteTab({data,save,user,isAdmin,centroId}){
       (form.dataRichiesta?`📅 <b>Data:</b> ${form.dataRichiesta}\n`:'')+
       (form.note?`💬 <b>Note:</b> ${form.note}\n`:'')+
       `\n🔗 <a href="https://app.vivaioapp.it/">Apri gestionale → Richieste</a>`;
-    // Notifica all'admin del vivaio
-    const admins=(data.utenti||[]).filter(u=>u.ruolo==='admin');
-    for(const adm of admins){const cid=adm.tgChatId||adm.tgchatid;if(cid)await tgSend(cid, msg);}
+    for(const cid of [].concat(TG_ADMIN_CHATID))await tgSend(cid, msg);
     setSaving(false);close();
   };
 
@@ -1944,25 +1951,7 @@ function RespApp({data,save,user,logout}){
                     h('div',{style:{fontSize:'40px',marginBottom:'8px'}},'📋'),
                     h('p',{style:{color:'#666',fontSize:'14px',marginBottom:'1rem'}},'Nessuna proposta inserita.')
                   )
-                :h('div',{style:{marginBottom:'1rem'}},
-                    // Mini lista proposte pendenti
-                    h('p',{style:{fontSize:'13px',color:'#666',marginBottom:'8px'}},nProposte+' proposte in attesa di conferma'),
-                    (data.lavorazioni||[]).filter(l=>l.centroId===selId&&l.stato==='proposta').sort((a,b)=>{
-                      const P={alta:0,media:1,bassa:2,'':3};
-                      return (P[a.priorita||'']??3)-(P[b.priorita||'']??3);
-                    }).map(l=>{
-                      const s=(data.settori||[]).find(x=>x.id===l.settoreId);
-                      const t=(data.tipi||[]).find(x=>x.id===l.tipoId);
-                      const PCOL={alta:'#E24B4A',media:'#EF9F27',bassa:'#639922','':'#ccc'};
-                      return h('div',{key:l.id,className:'card',style:{marginBottom:'8px',borderLeft:'4px solid '+(PCOL[l.priorita||'']||'#ddd')}},
-                        h('div',{style:{fontWeight:500,fontSize:'14px'}},t?.nome||'Lavorazione generica'),
-                        h('div',{style:{fontSize:'13px',color:'#888',marginTop:'3px'}},
-                          (s?.nome?s.nome+' · ':'')+(l.data?'📅 '+l.data:'Nessuna data'),
-                          l.note&&h('span',null,' · '+l.note)
-                        )
-                      );
-                    })
-                  )
+                :h(ProposteTab,{data,save,centroId:selId,user})
             )
       ),
 
@@ -2137,8 +2126,7 @@ ${lines}
       username:item.user||item.username||'',
       pass:item.pass||'',
       ruolo:item.ruolo||'responsabile',
-      centroIds:item.centroIds||[],
-      tgChatId:item.tgChatId||null
+      centroIds:item.centroIds||[]
     };
     if(tbl==='centri')return{
       id:item.id,
@@ -2252,8 +2240,7 @@ ${lines}
 function ImpostazioniTab({user,data,save}){
   const [nuovaPass,setNuovaPass]=React.useState('');
   const [confermaPass,setConfermaPass]=React.useState('');
-  const currentUser=(data.utenti||[]).find(u=>u.id===user.id)||user;
-  const [chatId,setChatId]=React.useState(currentUser.tgChatId||currentUser.tgchatid||'');
+  const [chatId,setChatId]=React.useState(user.tgChatId||'');
   const [okMsg,setOkMsg]=React.useState('');
   const [errMsg,setErrMsg]=React.useState('');
 
