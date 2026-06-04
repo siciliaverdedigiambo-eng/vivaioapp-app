@@ -176,37 +176,28 @@ function TopBar({title,user,logout,extra}){
 
 // ── LOGIN ──
 function Login({onLogin}){
-  const [email,setEmail]    = useState('');
   const [uname,setUname]    = useState('');
   const [pass,setPass]      = useState('');
   const [err,setErr]        = useState('');
   const [busy,setBusy]      = useState(false);
-  const [step,setStep]      = useState('email');
-  const [tname,setTname]    = useState('');
 
-  const checkEmail = async () => {
-    if(!email.trim()){ setErr('Inserisci la tua email.'); return; }
-    setBusy(true); setErr('');
-    try {
-      const r = await fetch(SB+'/rest/v1/tenants?email=eq.'+encodeURIComponent(email.trim().toLowerCase()),{headers:SBH});
-      const list = await r.json();
-      if(!list||!list.length){ setErr('Nessun account trovato. Contatta VivaioApp.'); setBusy(false); return; }
-      if(!list[0].attivo){ setErr('Account sospeso. Contatta VivaioApp.'); setBusy(false); return; }
-      sessionStorage.setItem('va_tenant',JSON.stringify(list[0]));
-      setTname(list[0].nome||'');
-      setStep('pass');
-    } catch{ setErr('Errore di rete. Riprova.'); }
-    setBusy(false);
-  };
+  const checkEmail = async () => {}; // legacy stub
 
   const doLogin = async () => {
     if(!uname.trim()||!pass.trim()){ setErr('Inserisci username e password.'); return; }
     setBusy(true); setErr('');
     try {
-      const tenant = JSON.parse(sessionStorage.getItem('va_tenant')||'{}');
-      const r = await fetch(SB+'/rest/v1/utenti?tenantId=eq.'+tenant.id+'&username=eq.'+encodeURIComponent(uname.trim()),{headers:SBH});
+      // Cerca l'utente per username in tutti i tenant
+      const r = await fetch(SB+'/rest/v1/utenti?username=eq.'+encodeURIComponent(uname.trim()),{headers:SBH});
       const list = await r.json();
       if(!list||!list.length||list[0].pass!==pass){ setErr('Credenziali non valide.'); setBusy(false); return; }
+      // Carica il tenant associato
+      const rt = await fetch(SB+'/rest/v1/tenants?id=eq.'+list[0].tenantId,{headers:SBH});
+      const tenants = await rt.json();
+      if(!tenants||!tenants.length){ setErr('Account non trovato. Contatta VivaioApp.'); setBusy(false); return; }
+      const tenant = tenants[0];
+      if(!tenant.attivo){ setErr('Account sospeso. Contatta VivaioApp.'); setBusy(false); return; }
+      sessionStorage.setItem('va_tenant',JSON.stringify(tenant));
       const u = Object.assign({},list[0],{tenant});
       try{ sessionStorage.setItem('va_user',JSON.stringify(u)); }catch{}
       // Notify super-admin if trial expiring soon
@@ -230,25 +221,9 @@ function Login({onLogin}){
         h('p',{style:{fontSize:'13px',color:'#999',marginTop:'6px'}},'Gestionale aziendale')
       ),
       h('div',{className:'card',style:{padding:'1.75rem'}},
-        step==='email' ? h('div',null,
+        h('div',null,
           h('h2',{style:{fontSize:'16px',fontWeight:600,marginBottom:'4px'}},'Accedi al tuo vivaio'),
-          h('p',{style:{fontSize:'13px',color:'#888',marginBottom:'1.25rem'}},'Inserisci la tua email aziendale'),
-          h('label',{className:'lbl'},'Email'),
-          h('input',{type:'email',value:email,onChange:e=>setEmail(e.target.value),
-            placeholder:'info@miovivaio.it',style:{marginBottom:'1rem'},
-            onKeyDown:e=>e.key==='Enter'&&checkEmail()}),
-          err&&h('p',{style:{color:'#A32D2D',fontSize:'13px',marginBottom:'12px'}},err),
-          h('button',{onClick:checkEmail,className:'btn-g',style:{width:'100%'},disabled:busy},busy?'Verifica...':'Continua')
-        ) : h('div',null,
-          h('div',{style:{background:'#EAF3DE',borderRadius:'8px',padding:'10px 12px',marginBottom:'1.25rem',display:'flex',alignItems:'center',gap:'10px'}},
-            h('span',{}, '🏢'),
-            h('div',null,
-              h('div',{style:{fontWeight:500,fontSize:'13px'}},tname),
-              h('div',{style:{fontSize:'11px',color:'#888'}},email)
-            ),
-            h('button',{onClick:()=>{setStep('email');setErr('');setUname('');setPass('');setTname('');sessionStorage.removeItem('va_tenant');},
-              style:{marginLeft:'auto',background:'transparent',border:'none',color:'#3B6D11',cursor:'pointer',fontSize:'12px'}},'Cambia')
-          ),
+          h('p',{style:{fontSize:'13px',color:'#888',marginBottom:'1.25rem'}},'Inserisci username e password'),
           h('label',{className:'lbl'},'Username'),
           h('input',{value:uname,onChange:e=>setUname(e.target.value),style:{marginBottom:'12px'},
             onKeyDown:e=>e.key==='Enter'&&doLogin()}),
