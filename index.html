@@ -1562,7 +1562,9 @@ function RichiesteTab({data,save,user,isAdmin,centroId}){
       (form.dataRichiesta?`📅 <b>Data:</b> ${form.dataRichiesta}\n`:'')+
       (form.note?`💬 <b>Note:</b> ${form.note}\n`:'')+
       `\n🔗 <a href="https://app.vivaioapp.it/">Apri gestionale → Richieste</a>`;
-    for(const cid of [].concat(TG_ADMIN_CHATID))await tgSend(cid, msg);
+    // Notifica all'admin del vivaio
+    const admins=(data.utenti||[]).filter(u=>u.ruolo==='admin');
+    for(const adm of admins)if(adm.tgChatId)await tgSend(adm.tgChatId, msg);
     setSaving(false);close();
   };
 
@@ -2135,7 +2137,8 @@ ${lines}
       username:item.user||item.username||'',
       pass:item.pass||'',
       ruolo:item.ruolo||'responsabile',
-      centroIds:item.centroIds||[]
+      centroIds:item.centroIds||[],
+      tgChatId:item.tgChatId||null
     };
     if(tbl==='centri')return{
       id:item.id,
