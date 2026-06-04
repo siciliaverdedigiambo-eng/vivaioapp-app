@@ -491,7 +491,7 @@ function UtentiTab({data,save}){
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
   const close=()=>{setM(false);setForm({});};
   const sav=async()=>{
-    if(!form.nome?.trim()||!form.user?.trim()||!form.pass?.trim())return alert('Compila nome, username e password.');
+    if(!form.nome?.trim()||(!form.user?.trim()&&!form.username?.trim())||!form.pass?.trim())return alert('Compila nome, username e password.');
     setSaving(true);
     const u=form.id?data.utenti.map(x=>x.id===form.id?form:x):[...data.utenti,{id:gid(),ruolo:'responsabile',centroIds:[],...form}];
     await save({...data,utenti:u});setSaving(false);close();
