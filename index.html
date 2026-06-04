@@ -2252,7 +2252,8 @@ ${lines}
 function ImpostazioniTab({user,data,save}){
   const [nuovaPass,setNuovaPass]=React.useState('');
   const [confermaPass,setConfermaPass]=React.useState('');
-  const [chatId,setChatId]=React.useState(user.tgChatId||'');
+  const currentUser=(data.utenti||[]).find(u=>u.id===user.id)||user;
+  const [chatId,setChatId]=React.useState(currentUser.tgChatId||'');
   const [okMsg,setOkMsg]=React.useState('');
   const [errMsg,setErrMsg]=React.useState('');
 
