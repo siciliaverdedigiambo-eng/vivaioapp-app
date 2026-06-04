@@ -128,7 +128,7 @@ async function tgSend(chatId,text,botName='vivaioapp'){
 }
 async function notifyResponsabili(centroId,msg,data){
   const uu = (data.utenti||[]).filter(u=>u.ruolo!=='admin'&&(u.centroIds||[]).includes(centroId));
-  for(const u of uu){ if(u.tgChatId) await tgSend(u.tgChatId,msg); }
+  for(const u of uu){ const cid=u.tgChatId||u.tgchatid; if(cid) await tgSend(cid,msg); }
 }
 
 // ── UI COMPONENTS ──
@@ -1564,7 +1564,7 @@ function RichiesteTab({data,save,user,isAdmin,centroId}){
       `\n🔗 <a href="https://app.vivaioapp.it/">Apri gestionale → Richieste</a>`;
     // Notifica all'admin del vivaio
     const admins=(data.utenti||[]).filter(u=>u.ruolo==='admin');
-    for(const adm of admins)if(adm.tgChatId)await tgSend(adm.tgChatId, msg);
+    for(const adm of admins){const cid=adm.tgChatId||adm.tgchatid;if(cid)await tgSend(cid, msg);}
     setSaving(false);close();
   };
 
@@ -2253,7 +2253,7 @@ function ImpostazioniTab({user,data,save}){
   const [nuovaPass,setNuovaPass]=React.useState('');
   const [confermaPass,setConfermaPass]=React.useState('');
   const currentUser=(data.utenti||[]).find(u=>u.id===user.id)||user;
-  const [chatId,setChatId]=React.useState(currentUser.tgChatId||'');
+  const [chatId,setChatId]=React.useState(currentUser.tgChatId||currentUser.tgchatid||'');
   const [okMsg,setOkMsg]=React.useState('');
   const [errMsg,setErrMsg]=React.useState('');
 
