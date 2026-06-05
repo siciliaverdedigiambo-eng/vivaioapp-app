@@ -216,12 +216,12 @@ function renderStep2(){
     <input id="f-pass" type="password" value="${formData.password}" placeholder="Minimo 6 caratteri" oninput="formData.password=this.value">
     <label>Conferma password *</label>
     <input id="f-pass2" type="password" placeholder="Ripeti la password">
-    <button class="btn-green" onclick="goStep3()">Continua →</button>
+    <button id="btn-step2" class="btn-green" onclick="goStep3()">Continua →</button>
     <button class="btn-back" onclick="step=1;render()">← Indietro</button>
   `;
 }
 
-function goStep3(){
+async function goStep3(){
   const u = formData.username.trim();
   const p = formData.password;
   const p2 = document.getElementById('f-pass2').value;
@@ -230,6 +230,24 @@ function goStep3(){
   if(u.length<3){ err.textContent='Username troppo corto (minimo 3 caratteri).'; err.style.display='block'; return; }
   if(p.length<6){ err.textContent='Password troppo corta (minimo 6 caratteri).'; err.style.display='block'; return; }
   if(p!==p2){ err.textContent='Le password non coincidono.'; err.style.display='block'; return; }
+  // Verifica univocità globale dello username
+  const btn = document.getElementById('btn-step2');
+  if(btn){ btn.disabled=true; btn.textContent='Verifica...'; }
+  err.style.display='none';
+  try {
+    const esistenti = await sbFind('utenti','username',u);
+    if(esistenti.length>0){
+      err.textContent='Username già in uso, scegline un altro.';
+      err.style.display='block';
+      if(btn){ btn.disabled=false; btn.textContent='Continua →'; }
+      return;
+    }
+  } catch {
+    err.textContent='Errore di rete. Riprova.';
+    err.style.display='block';
+    if(btn){ btn.disabled=false; btn.textContent='Continua →'; }
+    return;
+  }
   step = 3;
   render();
 }
@@ -289,6 +307,14 @@ async function completa(){
   const err = document.getElementById('err3');
 
   try{
+    // Ricontrollo univocità username (sicurezza contro registrazioni concorrenti)
+    const dup = await sbFind('utenti','username',formData.username.trim());
+    if(dup.length>0){
+      if(err){ err.textContent='Username già in uso, scegline un altro.'; err.style.display='block'; }
+      btn.textContent = '🚀 Crea il mio account';
+      btn.disabled = false;
+      return;
+    }
     // Create tenant
     const tRes = await sbIns('tenants',{
       nome: formData.nome,
