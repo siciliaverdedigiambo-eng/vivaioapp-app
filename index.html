@@ -100,6 +100,20 @@ const TG_PROXY = SB+'/functions/v1/super-responder';
 const Badge = ({c,children}) => h('span',{className:'badge b'+c},children);
 function gid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
 
+// Ritorna sempre l'array dei settori di una lavorazione (multi-settore + retrocompat con settoreId singolo)
+function lavSettori(l){
+  if(l && Array.isArray(l.settoreIds) && l.settoreIds.length) return l.settoreIds;
+  if(l && l.settoreId) return [l.settoreId];
+  return [];
+}
+// Nomi settori separati da virgola per la visualizzazione
+function settoriNomi(l,settoriList){
+  const ids=lavSettori(l);
+  if(!ids.length) return '';
+  return ids.map(id=>{const s=(settoriList||[]).find(x=>x.id===id);return s?s.nome:'?';}).join(', ');
+}
+
+
 // ── DB ──
 async function sbGet(tbl,tid){
   const q = tid ? '?tenantId=eq.'+tid+'&order=id' : '?order=id';
@@ -550,7 +564,7 @@ function LavForm({data,save,centroId,onDone,adminMode}){
   const [selCentro,setSelCentro]=useState(centroId||'');
   const effCentro=centroId||selCentro;
   const settori=(data.settori||[]).filter(s=>s.centroId===effCentro);
-  const INIT={data:'',settoreId:'',tipoId:'',dipendentiIds:[],oreMap:{},quantita:'',note:'',stato:'proposta',priorita:'',varietaId:''};
+  const INIT={data:'',settoreId:'',settoreIds:[],tipoId:'',dipendentiIds:[],oreMap:{},quantita:'',note:'',stato:'proposta',priorita:'',varietaId:''};
   const [form,setForm]=useState(INIT);const [err,setErr]=useState({});const [saving,setSaving]=useState(false);
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
   const tog=id=>setForm(f=>{
@@ -568,18 +582,19 @@ function LavForm({data,save,centroId,onDone,adminMode}){
     if(Object.keys(e).length){setErr(e);return;}
     setSaving(true);
     const totOre=form.dipendentiIds.reduce((s,id)=>s+(parseFloat(form.oreMap[id])||0),0);
-    const newLav={id:gid(),centroId:effCentro,...form,stato:'proposta',ore:totOre||null,oreMap:form.oreMap,varietaId:form.varietaId||'',createdAt:new Date().toISOString()};
+    const selSett=(form.settoreIds||[]).length?form.settoreIds:(form.settoreId?[form.settoreId]:[]);
+    const newLav={id:gid(),centroId:effCentro,...form,settoreIds:selSett,settoreId:selSett[0]||'',stato:'proposta',ore:totOre||null,oreMap:form.oreMap,varietaId:(selSett.length===1?form.varietaId:'')||'',createdAt:new Date().toISOString()};
     await save({...data,lavorazioni:[...data.lavorazioni,newLav]});
 
     // Notifica Telegram al responsabile se inserita dall'admin
     if(adminMode){
       const centro=(data.centri||[]).find(x=>x.id===effCentro);
-      const settore=(data.settori||[]).find(x=>x.id===form.settoreId);
+      const settNomi=settoriNomi(newLav,data.settori)||'—';
       const tipo=(data.tipi||[]).find(x=>x.id===form.tipoId);
       const pLab={alta:'🔴 ALTA',media:'🟡 MEDIA',bassa:'🟢 BASSA','':''}[form.priorita||''];
       const msg='🌿 <b>'+user.tenant.nome+' \u2014 Nuova lavorazione assegnata</b>\n\n'+
         '\uD83D\uDCCD <b>Centro:</b> '+(centro?.nome||'\u2014')+'\n'+
-        '\uD83C\uDF31 <b>Settore:</b> '+(settore?.nome||'\u2014')+'\n'+
+        '\uD83C\uDF31 <b>Settori:</b> '+settNomi+'\n'+
         '\uD83D\uDD27 <b>Tipo:</b> '+(tipo?.nome||'\u2014')+'\n'+
         (form.data?'\uD83D\uDCC5 <b>Data prevista:</b> '+form.data+'\n':'')+
         (pLab?'\u26A1 <b>Priorit\u00E0:</b> '+pLab+'\n':'')+
@@ -594,7 +609,7 @@ function LavForm({data,save,centroId,onDone,adminMode}){
   return h('div',{className:'card',style:{maxWidth:'580px'}},
     adminMode&&h('div',{style:{marginBottom:'12px'}},
       h('label',{className:'lbl'},'Centro aziendale *'),
-      h('select',{value:selCentro,onChange:e=>{setSelCentro(e.target.value);setForm(f=>({...f,settoreId:''}));},style:err.c?er:{}},
+      h('select',{value:selCentro,onChange:e=>{setSelCentro(e.target.value);setForm(f=>({...f,settoreId:'',settoreIds:[],varietaId:''}));},style:err.c?er:{}},
         h('option',{value:''},'— Seleziona —'),
         (data.centri||[]).map(c=>h('option',{key:c.id,value:c.id},c.nome))
       )
@@ -611,16 +626,27 @@ function LavForm({data,save,centroId,onDone,adminMode}){
     ),
     h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'10px',marginBottom:'12px'}},
       h('div',null,h('label',{className:'lbl'},isCompleta?'Data *':'Data prevista'),h('input',{type:'date',value:form.data,onChange:F('data'),style:err.d?er:{}})),
-      h('div',null,h('label',{className:'lbl'},'Settore (opzionale)'),
-        h('select',{value:form.settoreId,onChange:F('settoreId')},
-          h('option',{value:''},'— Nessun settore specifico —'),
-          settori.map(s=>h('option',{key:s.id,value:s.id},s.nome))
-        )
+      h('div',{style:{gridColumn:'1/-1'}},h('label',{className:'lbl'},'Settori (puoi sceglierne più di uno)'),
+        settori.length===0
+          ?h('p',{style:{fontSize:'13px',color:'#999',margin:'4px 0'}},effCentro?'Nessun settore in questo centro.':'Seleziona prima il centro.')
+          :h('div',{style:{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'4px'}},
+              settori.map(s=>{
+                const sel=(form.settoreIds||[]).includes(s.id);
+                return h('label',{key:s.id,style:{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'13px',padding:'6px 12px',borderRadius:'8px',border:'1px solid '+(sel?'#3B6D11':'#ccc'),background:sel?'#EAF3DE':'#fff',fontWeight:sel?500:400}},
+                  h('input',{type:'checkbox',checked:sel,onChange:()=>setForm(f=>{
+                    const cur=f.settoreIds||[];
+                    const next=cur.includes(s.id)?cur.filter(x=>x!==s.id):[...cur,s.id];
+                    return{...f,settoreIds:next,settoreId:next[0]||'',varietaId:next.length===1?f.varietaId:''};
+                  }),style:{accentColor:'#3B6D11'}}),
+                  s.nome
+                );
+              })
+            )
       ),
-      h('div',null,h('label',{className:'lbl'},'Varietà (opzionale)'),
+      (form.settoreIds||[]).length===1&&h('div',null,h('label',{className:'lbl'},'Varietà (opzionale)'),
         h('select',{value:form.varietaId||'',onChange:F('varietaId')},
           h('option',{value:''},'— Tutto il settore —'),
-          form.settoreId&&((data.settori||[]).find(s=>s.id===form.settoreId)?.varieta||[]).filter(v=>v.nome).map((v,i)=>
+          ((data.settori||[]).find(s=>s.id===(form.settoreIds||[])[0])?.varieta||[]).filter(v=>v.nome).map((v,i)=>
             h('option',{key:i,value:v.nome},v.nome+(v.vaso?' ('+v.vaso+')':'')+(v.quantita?' — '+v.quantita.toLocaleString('it-IT')+' p.':''))
           )
         )
@@ -709,7 +735,7 @@ function ProposteTab({data,save,centroId,user}){
   });
 
   const openConferma=l=>{
-    setForm({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},dataConferma:''});
+    setForm({...l,settoreIds:lavSettori(l),dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},dataConferma:''});
     setModal(true);
   };
   const close=()=>{setModal(false);setForm({});};
@@ -717,7 +743,8 @@ function ProposteTab({data,save,centroId,user}){
   const conferma=async()=>{
     if(!form.dataConferma){alert('Inserisci la data in cui si farà la lavorazione.');return;}
     setSaving(true);
-    const updated={...form,data:form.dataConferma,stato:'confermata',confermataAt:new Date().toISOString()};
+    const selSett=(form.settoreIds||[]).length?form.settoreIds:lavSettori(form);
+    const updated={...form,settoreIds:selSett,settoreId:selSett[0]||'',data:form.dataConferma,stato:'confermata',confermataAt:new Date().toISOString()};
     await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===form.id?updated:l)});
     setSaving(false);close();
   };
@@ -738,7 +765,6 @@ function ProposteTab({data,save,centroId,user}){
           )),
           h('tbody',null,proposte.map(l=>{
             const centro=(data.centri||[]).find(x=>x.id===l.centroId);
-            const settore=(data.settori||[]).find(x=>x.id===l.settoreId);
             const tipo=(data.tipi||[]).find(x=>x.id===l.tipoId);
             return h('tr',{key:l.id},
               h('td',{style:{textAlign:'center'}},
@@ -748,7 +774,7 @@ function ProposteTab({data,save,centroId,user}){
                 )
               ),
               h('td',{style:{fontSize:'13px'}},centro?.nome||'—'),
-              h('td',null,settore?.nome||'—'),
+              h('td',null,settoriNomi(l,data.settori)||'—'),
               h('td',null,tipo?.nome||'—'),
               h('td',{style:{color:l.data?'#1a1a1a':'#bbb',fontStyle:l.data?'normal':'italic'}},l.data||'non indicata'),
               h('td',{style:{fontSize:'12px',color:'#666'}},l.quantita||'—'),
@@ -765,20 +791,21 @@ function ProposteTab({data,save,centroId,user}){
       h('div',{style:{background:'#EAF3DE',borderRadius:'8px',padding:'10px 14px',marginBottom:'14px',fontSize:'13px',color:'#27500A'}},'Indica la data in cui verrà eseguita la lavorazione. La proposta passerà allo stato "Confermata".'),
       h('label',{className:'lbl'},'📅 Data in cui si farà la lavorazione *'),
       h('input',{type:'date',value:form.dataConferma||'',onChange:e=>setForm(f=>({...f,dataConferma:e.target.value})),style:{marginBottom:'12px',...(!form.dataConferma?{borderColor:'#F7C1C1'}:{})}}),
-      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}},
-        h('div',null,
-          h('label',{className:'lbl'},'Settore'),
-          h('select',{value:form.settoreId||'',onChange:F('settoreId')},
-            h('option',{value:''},'—'),
-            (data.settori||[]).filter(s=>s.centroId===form.centroId).map(s=>h('option',{key:s.id,value:s.id},s.nome))
-          )
+      h('div',{style:{marginBottom:'12px'}},
+        h('label',{className:'lbl'},'Settori'),
+        h('div',{style:{display:'flex',flexWrap:'wrap',gap:'8px',marginBottom:'8px'}},
+          (data.settori||[]).filter(s=>s.centroId===form.centroId).map(s=>{
+            const sel=(form.settoreIds||[]).includes(s.id);
+            return h('label',{key:s.id,style:{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'13px',padding:'6px 12px',borderRadius:'8px',border:'1px solid '+(sel?'#3B6D11':'#ccc'),background:sel?'#EAF3DE':'#fff',fontWeight:sel?500:400}},
+              h('input',{type:'checkbox',checked:sel,onChange:()=>setForm(f=>{const cur=f.settoreIds||[];const next=cur.includes(s.id)?cur.filter(x=>x!==s.id):[...cur,s.id];return{...f,settoreIds:next,settoreId:next[0]||''};}),style:{accentColor:'#3B6D11'}}),
+              s.nome
+            );
+          })
         ),
-        h('div',null,
-          h('label',{className:'lbl'},'Tipo lavorazione'),
-          h('select',{value:form.tipoId||'',onChange:F('tipoId')},
-            h('option',{value:''},'—'),
-            (data.tipi||[]).map(t=>h('option',{key:t.id,value:t.id},t.nome))
-          )
+        h('label',{className:'lbl'},'Tipo lavorazione'),
+        h('select',{value:form.tipoId||'',onChange:F('tipoId')},
+          h('option',{value:''},'—'),
+          (data.tipi||[]).map(t=>h('option',{key:t.id,value:t.id},t.nome))
         )
       ),
       h('label',{className:'lbl'},'Dipendenti assegnati'),
@@ -820,13 +847,12 @@ function ConfermatTab({data,save,centroId,readOnly}){
           )),
           h('tbody',null,lav.map(l=>{
             const centro=(data.centri||[]).find(x=>x.id===l.centroId);
-            const settore=(data.settori||[]).find(x=>x.id===l.settoreId);
             const tipo=(data.tipi||[]).find(x=>x.id===l.tipoId);
             const nomi=(l.dipendentiIds||[]).map(id=>{const d=(data.dipendenti||[]).find(x=>x.id===id);return d?d.cognome:'?';}).join(', ');
             return h('tr',{key:l.id,style:{background:'#f9fff5'}},
               h('td',{style:{fontWeight:500}},l.data||'—'),
               !centroId&&h('td',{style:{fontSize:'13px'}},centro?.nome||'—'),
-              h('td',null,settore?.nome||'—'),
+              h('td',null,settoriNomi(l,data.settori)||'—'),
               h('td',null,tipo?.nome||'—'),
               h('td',{style:{fontSize:'12px',color:'#666',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},nomi||h('span',{style:{color:'#bbb',fontStyle:'italic'}},'non assegnati')),
               h('td',{style:{fontSize:'12px',color:'#666'}},l.quantita||'—'),
@@ -866,20 +892,37 @@ function DaFareTab({data,save,centroId}){
     return{...f,dipendentiIds:inList?(f.dipendentiIds||[]).filter(x=>x!==id):[...(f.dipendentiIds||[]),id],oreMap:newOreMap};
   });
   const setOre2=(id,v)=>setForm(f=>({...f,oreMap:{...(f.oreMap||{}),[id]:v}}));
-  const close=()=>{setM(null);setForm({});};
+  const [settComplete,setSettComplete]=useState([]); // settori spuntati come lavorati (modal completa)
+  const togSettC=id=>setSettComplete(cur=>cur.includes(id)?cur.filter(x=>x!==id):[...cur,id]);
+  const close=()=>{setM(null);setForm({});setSettComplete([]);};
 
-  const openEdit=l=>{ setForm({...l,ore:l.ore!=null?String(l.ore):'',dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{}}); setM('edit'); };
-  const openCompleta=l=>{ setForm({...l,ore:l.ore!=null?String(l.ore):'',dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{}}); setM('completa'); };
+  const openEdit=l=>{ setForm({...l,settoreIds:lavSettori(l),ore:l.ore!=null?String(l.ore):'',dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{}}); setSettComplete([]); setM('edit'); };
+  const openCompleta=l=>{ setForm({...l,settoreIds:lavSettori(l),ore:l.ore!=null?String(l.ore):'',dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{}}); setSettComplete(lavSettori(l)); setM('completa'); };
   const sav=async(completa)=>{
     if(completa){
       if(!(form.dipendentiIds||[]).length){alert('Per completare seleziona almeno un dipendente.');return;}
       if((form.dipendentiIds||[]).some(id=>!parseFloat((form.oreMap||{})[id]))){alert('Inserisci le ore per ogni dipendente.');return;}
+      const allSett=lavSettori(form);
+      if(allSett.length && !settComplete.length){alert('Seleziona almeno un settore effettivamente lavorato.');return;}
     }
     setSaving(true);
     const totOre=(form.dipendentiIds||[]).reduce((s,id)=>s+(parseFloat((form.oreMap||{})[id])||0),0);
-    const updated={...form,ore:totOre||null,oreMap:form.oreMap||{},stato:completa?'completata':'confermata'};
-    await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===form.id?updated:l)});
+    const allSett=lavSettori(form);
+    const fatti=settComplete.filter(id=>allSett.includes(id));
+    const restanti=allSett.filter(id=>!fatti.includes(id));
 
+    let nuoveLav;
+    if(completa && allSett.length>1 && restanti.length>0){
+      // SPLIT: i settori lavorati diventano una riga completata, i restanti restano confermati
+      const completataRow={...form,settoreIds:fatti,settoreId:fatti[0]||'',ore:totOre||null,oreMap:form.oreMap||{},stato:'completata',varietaId:fatti.length===1?form.varietaId:''};
+      const apertaRow={...form,id:gid(),settoreIds:restanti,settoreId:restanti[0]||'',ore:null,oreMap:{},dipendentiIds:[],stato:'confermata',varietaId:restanti.length===1?form.varietaId:'',confermataAt:form.confermataAt||new Date().toISOString()};
+      nuoveLav=data.lavorazioni.flatMap(l=>l.id===form.id?[completataRow,apertaRow]:[l]);
+    } else {
+      // Nessuno split: completa tutto, oppure salva senza completare
+      const updated={...form,ore:totOre||null,oreMap:form.oreMap||{},stato:completa?'completata':'confermata',settoreIds:completa?(fatti.length?fatti:allSett):allSett,settoreId:(completa?(fatti[0]||allSett[0]):allSett[0])||''};
+      nuoveLav=data.lavorazioni.map(l=>l.id===form.id?updated:l);
+    }
+    await save({...data,lavorazioni:nuoveLav});
     setSaving(false);close();
   };
   const del=async id=>{if(!confirm('Eliminare?'))return;await save({...data,lavorazioni:data.lavorazioni.filter(l=>l.id!==id)});};
@@ -891,7 +934,7 @@ function DaFareTab({data,save,centroId}){
     const win=window.open('','_blank');
     const now=new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
     const rows=myLav.map(l=>{
-      const s=(data.settori||[]).find(x=>x.id===l.settoreId);
+      const s=settoriNomi(l,data.settori)||'—';
       const t=(data.tipi||[]).find(x=>x.id===l.tipoId);
       const centro=(data.centri||[]).find(x=>x.id===l.centroId);
       const nomi=(l.dipendentiIds||[]).map(id=>{const d=(data.dipendenti||[]).find(x=>x.id===id);return d?d.cognome:'?';}).join(', ');
@@ -901,7 +944,7 @@ function DaFareTab({data,save,centroId}){
         <td style="text-align:center;padding:8px 10px"><span style="display:inline-block;width:13px;height:13px;border-radius:50%;background:${pCol};border:1.5px solid rgba(0,0,0,.15);vertical-align:middle"></span>&nbsp;<span style="font-size:12px;color:${pCol};font-weight:600">${pLab}</span></td>
         <td style="padding:8px 10px">${l.data||'<span style="color:#bbb;font-style:italic">nessuna</span>'}</td>
         ${!centroId?`<td style="padding:8px 10px;font-size:13px">${centro?.nome||'—'}</td>`:''}
-        <td style="padding:8px 10px">${s?.nome||'—'}</td>
+        <td style="padding:8px 10px">${s}</td>
         <td style="padding:8px 10px">${t?.nome||'—'}</td>
         <td style="padding:8px 10px;font-size:12px;color:#555">${nomi||'<span style="color:#bbb;font-style:italic">non assegnati</span>'}</td>
         <td style="padding:8px 10px;font-size:12px;color:#555">${l.quantita||'—'}</td>
@@ -957,7 +1000,6 @@ function DaFareTab({data,save,centroId}){
         h('table',{className:'tbl'},
           h('thead',null,h('tr',null,h('th',null,'Priorità'),h('th',null,'Data prevista'),!centroId&&h('th',null,'Centro'),h('th',null,'Settore'),h('th',null,'Varietà'),h('th',null,'Tipo'),h('th',null,'Dipendenti'),h('th',null,'Quantità'),h('th',null,'Note'),h('th',{style:{width:'120px'}}))),
           h('tbody',null,myLav.map(l=>{
-            const s=(data.settori||[]).find(x=>x.id===l.settoreId);
             const t=(data.tipi||[]).find(x=>x.id===l.tipoId);
             const nomi=(l.dipendentiIds||[]).map(id=>{const d=(data.dipendenti||[]).find(x=>x.id===id);return d?d.cognome:'?';}).join(', ');
             return h('tr',{key:l.id},
@@ -970,7 +1012,7 @@ function DaFareTab({data,save,centroId}){
                   :h('span',{onClick:()=>setEditingDate(l.id),style:{cursor:'pointer',color:l.data?'#1a1a1a':'#aaa',fontStyle:l.data?'normal':'italic',borderBottom:'1px dashed #ccc',padding:'2px 4px',borderRadius:'4px',fontSize:'14px',display:'inline-block'},title:'Clicca per impostare la data'},l.data||'nessuna data')
               ),
               !centroId&&h('td',{style:{fontSize:'13px'}},((data.centri||[]).find(x=>x.id===l.centroId)?.nome)||'—'),
-              h('td',null,s?.nome||'—'),
+              h('td',null,settoriNomi(l,data.settori)||'—'),
               h('td',{style:{fontSize:'12px',color:'#3B6D11'}},l.varietaId||'—'),
               h('td',null,t?.nome||'—'),
               h('td',{style:{fontSize:'12px',color:'#666',maxWidth:'130px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},nomi||h('span',{style:{color:'#bbb',fontStyle:'italic'}},'non assegnati')),
@@ -997,9 +1039,36 @@ function DaFareTab({data,save,centroId}){
       ),
       h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'10px',marginBottom:'10px'}},
         h('div',null,h('label',{className:'lbl'},'Data'),h('input',{type:'date',value:form.data||'',onChange:F('data')})),
-        h('div',null,h('label',{className:'lbl'},'Settore'),h('select',{value:form.settoreId||'',onChange:F('settoreId')},h('option',{value:''},'—'),settori.map(s=>h('option',{key:s.id,value:s.id},s.nome)))),
         h('div',null,h('label',{className:'lbl'},'Tipo'),h('select',{value:form.tipoId||'',onChange:F('tipoId')},h('option',{value:''},'—'),(data.tipi||[]).map(t=>h('option',{key:t.id,value:t.id},t.nome))))
       ),
+      // SETTORI: in modifica li puoi cambiare; in completamento spunti quelli effettivamente lavorati oggi
+      modal==='completa'
+        ?h('div',{style:{marginBottom:'12px'}},
+            h('label',{className:'lbl'},'Settori lavorati oggi *'),
+            h('p',{style:{fontSize:'12px',color:'#888',margin:'2px 0 6px'}},'Spunta solo i settori effettivamente completati. Quelli non spuntati restano da fare.'),
+            h('div',{style:{display:'flex',flexWrap:'wrap',gap:'8px'}},
+              lavSettori(form).map(id=>{
+                const s=(data.settori||[]).find(x=>x.id===id);
+                const sel=settComplete.includes(id);
+                return h('label',{key:id,style:{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'13px',padding:'6px 12px',borderRadius:'8px',border:'1px solid '+(sel?'#3B6D11':'#ccc'),background:sel?'#EAF3DE':'#fff',fontWeight:sel?500:400}},
+                  h('input',{type:'checkbox',checked:sel,onChange:()=>togSettC(id),style:{accentColor:'#3B6D11'}}),
+                  s?s.nome:'?'
+                );
+              })
+            )
+          )
+        :h('div',{style:{marginBottom:'12px'}},
+            h('label',{className:'lbl'},'Settori'),
+            h('div',{style:{display:'flex',flexWrap:'wrap',gap:'8px'}},
+              settori.map(s=>{
+                const sel=(form.settoreIds||[]).includes(s.id);
+                return h('label',{key:s.id,style:{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'13px',padding:'6px 12px',borderRadius:'8px',border:'1px solid '+(sel?'#3B6D11':'#ccc'),background:sel?'#EAF3DE':'#fff',fontWeight:sel?500:400}},
+                  h('input',{type:'checkbox',checked:sel,onChange:()=>setForm(f=>{const cur=f.settoreIds||[];const next=cur.includes(s.id)?cur.filter(x=>x!==s.id):[...cur,s.id];return{...f,settoreIds:next,settoreId:next[0]||''};}),style:{accentColor:'#3B6D11'}}),
+                  s.nome
+                );
+              })
+            )
+          ),
       h('label',{className:'lbl'},modal==='completa'?'Dipendenti *':'Dipendenti'),
       h(DipList,{data,checked:form.dipendentiIds||[],onToggle:tog,oreMap:form.oreMap||{},onOreChange:setOre2,showOre:true,errBorder:modal==='completa'&&!(form.dipendentiIds||[]).length}),
 
@@ -1031,7 +1100,8 @@ function CompletateTab({data,save,centroId}){
   const sav=async()=>{
     setSaving(true);
     const totOre=(form.dipendentiIds||[]).reduce((s,id)=>s+(parseFloat((form.oreMap||{})[id])||0),0);
-    await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===form.id?{...form,ore:totOre||null,oreMap:form.oreMap||{}}:l)});
+    const selSett=(form.settoreIds||[]).length?form.settoreIds:lavSettori(form);
+    await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===form.id?{...form,settoreIds:selSett,settoreId:selSett[0]||'',ore:totOre||null,oreMap:form.oreMap||{}}:l)});
     setSaving(false);close();
   };
   const del=async id=>{if(!confirm('Eliminare?'))return;await save({...data,lavorazioni:data.lavorazioni.filter(l=>l.id!==id)});};
@@ -1042,16 +1112,15 @@ function CompletateTab({data,save,centroId}){
       h('table',{className:'tbl'},
         h('thead',null,h('tr',null,h('th',null,'Data'),h('th',null,'Settore'),h('th',null,'Varietà'),h('th',null,'Tipo'),h('th',{style:{textAlign:'center'}},'Dip.'),h('th',null,'Ore tot.'),h('th',null,'Quantità'),h('th',null,'Note'),h('th',{style:{width:'90px'}}))),
         h('tbody',null,myLav.map(l=>{
-          const s=(data.settori||[]).find(x=>x.id===l.settoreId);
           const t=(data.tipi||[]).find(x=>x.id===l.tipoId);
           return h('tr',{key:l.id},
-            h('td',null,l.data),h('td',null,s?.nome||'—'),h('td',{style:{fontSize:'12px',color:'#3B6D11'}},l.varietaId||'—'),h('td',null,t?.nome||'—'),
+            h('td',null,l.data),h('td',null,settoriNomi(l,data.settori)||'—'),h('td',{style:{fontSize:'12px',color:'#3B6D11'}},l.varietaId||'—'),h('td',null,t?.nome||'—'),
             h('td',{style:{textAlign:'center'}},(l.dipendentiIds||[]).length),
             h('td',null,l.ore?l.ore.toFixed(1)+'h':'—'),
             h('td',{style:{fontSize:'12px',color:'#666'}},l.quantita||'—'),
             h('td',{style:{fontSize:'12px',color:'#666',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},l.note||'—'),
             h('td',null,h('div',{style:{display:'flex',gap:'4px'}},
-              h('button',{onClick:()=>{setForm({...l,oreMap:l.oreMap||{},dipendentiIds:l.dipendentiIds||[]});setM(true);},className:'btn-n sm',title:'Modifica lavorazione'},'✏️'),
+              h('button',{onClick:()=>{setForm({...l,settoreIds:lavSettori(l),oreMap:l.oreMap||{},dipendentiIds:l.dipendentiIds||[]});setM(true);},className:'btn-n sm',title:'Modifica lavorazione'},'✏️'),
               h('button',{onClick:()=>riapri(l.id),className:'btn-n sm',title:'Riapri come Da fare'},'↩'),
               h('button',{onClick:()=>del(l.id),className:'btn-r sm'},'🗑')
             ))
@@ -1062,9 +1131,19 @@ function CompletateTab({data,save,centroId}){
     modal&&h(Modal,{title:'Modifica lavorazione completata',onClose:close},
       h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'10px',marginBottom:'10px'}},
         h('div',null,h('label',{className:'lbl'},'Data'),h('input',{type:'date',value:form.data||'',onChange:F('data')})),
-        !centroId&&h('div',null,h('label',{className:'lbl'},'Centro'),h('select',{value:form.centroId||'',onChange:e=>setForm(f=>({...f,centroId:e.target.value,settoreId:''}))},h('option',{value:''},'—'),(data.centri||[]).map(cc=>h('option',{key:cc.id,value:cc.id},cc.nome)))),
-        h('div',null,h('label',{className:'lbl'},'Settore'),h('select',{value:form.settoreId||'',onChange:F('settoreId')},h('option',{value:''},'—'),((data.settori||[]).filter(s=>s.centroId===(centroId||form.centroId))).map(s=>h('option',{key:s.id,value:s.id},s.nome)))),
+        !centroId&&h('div',null,h('label',{className:'lbl'},'Centro'),h('select',{value:form.centroId||'',onChange:e=>setForm(f=>({...f,centroId:e.target.value,settoreId:'',settoreIds:[]}))},h('option',{value:''},'—'),(data.centri||[]).map(cc=>h('option',{key:cc.id,value:cc.id},cc.nome)))),
         h('div',null,h('label',{className:'lbl'},'Tipo'),h('select',{value:form.tipoId||'',onChange:F('tipoId')},h('option',{value:''},'—'),(data.tipi||[]).map(t=>h('option',{key:t.id,value:t.id},t.nome))))
+      ),
+      h('div',{style:{marginBottom:'10px'}},h('label',{className:'lbl'},'Settori'),
+        h('div',{style:{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'4px'}},
+          ((data.settori||[]).filter(s=>s.centroId===(centroId||form.centroId))).map(s=>{
+            const sel=(form.settoreIds||[]).includes(s.id);
+            return h('label',{key:s.id,style:{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'13px',padding:'6px 12px',borderRadius:'8px',border:'1px solid '+(sel?'#3B6D11':'#ccc'),background:sel?'#EAF3DE':'#fff',fontWeight:sel?500:400}},
+              h('input',{type:'checkbox',checked:sel,onChange:()=>setForm(f=>{const cur=f.settoreIds||[];const next=cur.includes(s.id)?cur.filter(x=>x!==s.id):[...cur,s.id];return{...f,settoreIds:next,settoreId:next[0]||''};}),style:{accentColor:'#3B6D11'}}),
+              s.nome
+            );
+          })
+        )
       ),
       h('label',{className:'lbl'},'Dipendenti'),
       h(DipList,{data,checked:form.dipendentiIds||[],onToggle:tog,oreMap:form.oreMap||{},onOreChange:setOre3,showOre:true,errBorder:false}),
@@ -1081,7 +1160,7 @@ function TutteLavTab({data,refresh}){
   const settoriF=f.centroId?(data.settori||[]).filter(s=>s.centroId===f.centroId):(data.settori||[]);
   const filtered=(data.lavorazioni||[]).filter(l=>{
     if(f.centroId&&l.centroId!==f.centroId)return false;
-    if(f.settoreId&&l.settoreId!==f.settoreId)return false;
+    if(f.settoreId&&!lavSettori(l).includes(f.settoreId))return false;
     if(f.stato&&l.stato!==f.stato)return false;
     if(f.da&&String(l.data)<f.da)return false;
     if(f.a&&String(l.data)>f.a)return false;
@@ -1109,13 +1188,12 @@ function TutteLavTab({data,refresh}){
         h('thead',null,h('tr',null,h('th',null,'Stato'),h('th',null,'Data'),h('th',null,'Centro'),h('th',null,'Settore'),h('th',null,'Tipo'),h('th',null,'Dipendenti'),h('th',null,'Ore tot.'),h('th',null,'Quantità'))),
         h('tbody',null,filtered.map(l=>{
           const centro=(data.centri||[]).find(c=>c.id===l.centroId);
-          const settore=(data.settori||[]).find(s=>s.id===l.settoreId);
           const tipo=(data.tipi||[]).find(t=>t.id===l.tipoId);
           const nomi=(l.dipendentiIds||[]).map(id=>{const d=(data.dipendenti||[]).find(x=>x.id===id);return d?d.cognome:'?';}).join(', ');
           const completata=l.stato==='completata';
           return h('tr',{key:l.id},
             h('td',null,h(Badge,{c:completata?'g':l.stato==='confermata'?'b':'a'},completata?'Completata':l.stato==='confermata'?'Confermata':'Proposta')),
-            h('td',null,l.data),h('td',{style:{fontSize:'13px'}},centro?.nome||'—'),h('td',{style:{fontSize:'13px'}},settore?.nome||'—'),h('td',null,tipo?.nome||'—'),
+            h('td',null,l.data),h('td',{style:{fontSize:'13px'}},centro?.nome||'—'),h('td',{style:{fontSize:'13px'}},settoriNomi(l,data.settori)||'—'),h('td',null,tipo?.nome||'—'),
             h('td',{style:{fontSize:'12px',color:'#666',maxWidth:'150px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},nomi||'—'),
             h('td',null,completata&&l.ore?l.ore.toFixed(1)+'h':'—'),
             h('td',{style:{color:'#666',fontSize:'13px'}},l.quantita||'—')
@@ -1138,7 +1216,7 @@ function ReportTab({data,centroId}){
     if(l.stato!=='completata')return false;
     if(centroId&&l.centroId!==centroId)return false;
     if(f.centroId&&l.centroId!==f.centroId)return false;
-    if(f.settoreId&&l.settoreId!==f.settoreId)return false;
+    if(f.settoreId&&!lavSettori(l).includes(f.settoreId))return false;
     if(f.tipoId&&l.tipoId!==f.tipoId)return false;
     if(f.dipId&&!(l.dipendentiIds||[]).includes(f.dipId))return false;
     if(f.da&&String(l.data)<f.da)return false;
@@ -1156,7 +1234,7 @@ function ReportTab({data,centroId}){
   }).filter(t=>t.n>0).sort((a,b)=>b.ore-a.ore);
 
   const perSettore=(data.settori||[]).filter(s=>centroId?s.centroId===centroId:true).map(s=>{
-    const sl=lav.filter(l=>l.settoreId===s.id);
+    const sl=lav.filter(l=>lavSettori(l).includes(s.id));
     return{...s,n:sl.length,ore:sl.reduce((x,l)=>x+(l.ore||0),0)};
   }).filter(s=>s.n>0).sort((a,b)=>b.ore-a.ore);
 
@@ -1168,10 +1246,10 @@ function ReportTab({data,centroId}){
 
   const getNome=(l)=>{
     const c2=(data.centri||[]).find(x=>x.id===l.centroId);
-    const s=(data.settori||[]).find(x=>x.id===l.settoreId);
+    const s=settoriNomi(l,data.settori);
     const t=(data.tipi||[]).find(x=>x.id===l.tipoId);
     const nomi=(l.dipendentiIds||[]).map(id=>{const d=(data.dipendenti||[]).find(x=>x.id===id);return d?d.cognome+' '+(d.nome||''):'?';}).join(', ');
-    return{centro:c2?.nome||'',settore:s?.nome||'',tipo:t?.nome||'',varieta:l.varietaId||'',nomi,ore:l.ore||0};
+    return{centro:c2?.nome||'',settore:s||'',tipo:t?.nome||'',varieta:l.varietaId||'',nomi,ore:l.ore||0};
   };
 
   const exportXls=()=>{
@@ -1830,7 +1908,7 @@ function RespApp({data,save,user,logout}){
   const [showRich,setShowRich]=useState(false);
   const centro=(data.centri||[]).find(c=>c.id===selId);
 
-  const nConfermate=(data.lavorazioni||[]).filter(l=>l.centroId===selId&&l.stato==='confermata').length;
+  const nConfermate=(data.lavorazioni||[]).filter(l=>l.centroId===selId&&(l.stato==='confermata'||l.stato==='da_fare')).length;
   const nRichiestePendenti=(data.richieste||[]).filter(r=>(user.centroIds||[]).includes(r.centroId)&&r.stato==='pendente').length;
   const nProposte=(data.lavorazioni||[]).filter(l=>l.centroId===selId&&l.stato==='proposta').length;
 
@@ -1906,7 +1984,7 @@ function RespApp({data,save,user,logout}){
               h('div',{style:{fontSize:'40px',marginBottom:'8px'}},'✅'),
               h('p',{style:{color:'#666',fontSize:'14px'}},'Nessuna lavorazione confermata.')
             )
-          :h(ConfermatTab,{data,save,centroId:selId,readOnly:true})
+          :h(DaFareTab,{data,save,centroId:selId})
       ),
 
       // TAB: PROPOSTE
@@ -2003,7 +2081,7 @@ function App(){
     Promise.all([sbGet('centri',_t),sbGet('settori',_t),sbGet('dipendenti',_t),sbGet('tipi',_t),sbGet('utenti',_t),sbGet('lavorazioni',_t),sbGet('richieste',_t)]).then(([centri,settori,dipendenti,tipi,utenti,lavorazioni,richieste])=>{
         const normSett=settori.map(s=>({...s,varieta:(s.varieta||[]).map(v=>({nome:v.nome||'',quantita:v.quantita||0,vaso:v.vaso||'',fornitore:v.fornitore||'',dataEntrata:v.dataEntrata||''})),note:s.note||'',lunghezza:s.lunghezza||null,larghezza:s.larghezza||null}));
         settori=normSett;
-        const normLav=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta',varietaId:l.varietaId||''}));
+        const normLav=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta',varietaId:l.varietaId||'',settoreIds:(Array.isArray(l.settoreIds)&&l.settoreIds.length)?l.settoreIds:(l.settoreId?[l.settoreId]:[])}));
         const d={centri,settori,dipendenti,tipi,utenti,lavorazioni:normLav,richieste:richieste||[]};
         setData(d);ref.current=d;setLoading(false);
       })
@@ -2017,7 +2095,7 @@ function App(){
     if(!user)return;
     const t=setInterval(()=>{
       const _tr2=user&&user.tenant?user.tenant.id:'';Promise.all([sbGet('lavorazioni',_tr2),sbGet('richieste',_tr2)]).then(([lavorazioni,richieste])=>{
-        const normLav=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta',varietaId:l.varietaId||''}));
+        const normLav=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta',varietaId:l.varietaId||'',settoreIds:(Array.isArray(l.settoreIds)&&l.settoreIds.length)?l.settoreIds:(l.settoreId?[l.settoreId]:[])}));
         const nd={...ref.current,lavorazioni:normLav,richieste:richieste||[]};
         setData(nd);ref.current=nd;
 
@@ -2053,7 +2131,7 @@ ${lines}
     if(!user||user.ruolo!=='admin')return;
     const t=setInterval(()=>{
       const _tr2=user&&user.tenant?user.tenant.id:'';Promise.all([sbGet('lavorazioni',_tr2),sbGet('richieste',_tr2)]).then(([lavorazioni,richieste])=>{
-        const normLav=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta',varietaId:l.varietaId||''}));
+        const normLav=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta',varietaId:l.varietaId||'',settoreIds:(Array.isArray(l.settoreIds)&&l.settoreIds.length)?l.settoreIds:(l.settoreId?[l.settoreId]:[])}));
         const nd={...ref.current,lavorazioni:normLav,richieste:richieste||[]};
         setData(nd);ref.current=nd;
       }).catch(()=>{});
@@ -2066,6 +2144,7 @@ ${lines}
       id:item.id,
       centroId:item.centroId||'',
       settoreId:item.settoreId||'',
+      settoreIds:Array.isArray(item.settoreIds)?item.settoreIds:(item.settoreId?[item.settoreId]:[]),
       tipoId:item.tipoId||'',
       varietaId:item.varietaId||'',
       data:item.data||null,
@@ -2138,7 +2217,7 @@ ${lines}
 
   async function refresh(){
     const _tr=user&&user.tenant?user.tenant.id:'';const [lavorazioni,richieste]=await Promise.all([sbGet('lavorazioni',_tr),sbGet('richieste',_tr)]);
-    const norm=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta'}));
+    const norm=lavorazioni.map(l=>({...l,dipendentiIds:l.dipendentiIds||[],oreMap:l.oreMap||{},data:l.data||'',priorita:l.priorita||'',stato:l.stato||'proposta',settoreIds:(Array.isArray(l.settoreIds)&&l.settoreIds.length)?l.settoreIds:(l.settoreId?[l.settoreId]:[])}));
     const nd={...ref.current,lavorazioni:norm,richieste:richieste||[]};setData(nd);ref.current=nd;
   }
 
