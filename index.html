@@ -1263,7 +1263,7 @@ function ReportTab({data,centroId}){
     hdr1.push('Ore totali','Quantità','Note');
     const rows1=[hdr1];
     lav.forEach(l=>{
-      const{centro,settore,tipo,nomi,ore}=getNome(l);
+      const{centro,settore,varieta,tipo,nomi,ore}=getNome(l);
       const row=[l.data||'',centro,settore,varieta,tipo,nomi];
       if(hasDip)row.push(parseFloat((l.oreMap||{})[f.dipId])||0);
       row.push(ore,l.quantita||'',l.note||'');
@@ -1355,7 +1355,7 @@ function ReportTab({data,centroId}){
           h('th',null,'Note')
         )),
         h('tbody',null,lav.map(l=>{
-          const{centro,settore,tipo,nomi,ore}=getNome(l);
+          const{centro,settore,varieta,tipo,nomi,ore}=getNome(l);
           return h('tr',{key:l.id},
             h('td',null,l.data||'—'),
             !centroId&&h('td',{style:{fontSize:'13px'}},centro),
