@@ -113,6 +113,28 @@ function settoriNomi(l,settoriList){
   return ids.map(id=>{const s=(settoriList||[]).find(x=>x.id===id);return s?s.nome:'?';}).join(', ');
 }
 
+// ── PIANI (Starter/Pro/Enterprise) ──
+// I tenant registrati prima dell'introduzione del campo "piano" non ce l'hanno valorizzato: li trattiamo come Pro
+// per non rompere account di test/demo esistenti. Ogni nuova registrazione scrive già il piano scelto.
+const PIANO_LIMITS = {
+  starter: { centri: 3, dipendenti: 15 },
+  pro: { centri: Infinity, dipendenti: Infinity },
+  enterprise: { centri: Infinity, dipendenti: Infinity }
+};
+function pianoOf(user){
+  return (user && user.tenant && user.tenant.piano) || 'pro';
+}
+function pianoLimits(user){
+  return PIANO_LIMITS[pianoOf(user)] || PIANO_LIMITS.pro;
+}
+function UpgradeLock({feature}){
+  return h('div',{className:'card',style:{textAlign:'center',padding:'2rem 1.5rem'}},
+    h('div',{style:{fontSize:'32px',marginBottom:'8px'}},'🔒'),
+    h('p',{style:{fontWeight:600,fontSize:'15px',marginBottom:'4px'}},feature+' è disponibile dal piano Pro'),
+    h('p',{style:{fontSize:'13px',color:'#666',marginBottom:'14px'}},'Passa a Pro per sbloccarla, oppure scrivici per attivarla sul tuo account.'),
+    h('a',{href:'mailto:info@vivaioapp.it?subject=Upgrade%20a%20Pro',className:'btn-g sm',style:{textDecoration:'none',display:'inline-block'}},'Passa a Pro →')
+  );
+}
 
 // ── DB ──
 async function sbGet(tbl,tid){
@@ -143,6 +165,10 @@ async function tgSend(chatId,text,botName='vivaioapp'){
 async function notifyResponsabili(centroId,msg,data){
   const uu = (data.utenti||[]).filter(u=>u.ruolo!=='admin'&&(u.centroIds||[]).includes(centroId));
   for(const u of uu){ if(u.tgChatId) await tgSend(u.tgChatId,msg); }
+}
+async function notifyAdmin(msg,data){
+  const uu = (data.utenti||[]).filter(u=>u.ruolo==='admin'&&u.tgChatId);
+  for(const u of uu){ await tgSend(u.tgChatId,msg); }
 }
 
 // ── UI COMPONENTS ──
@@ -263,7 +289,8 @@ function Tabs({tabs,active,onChange}){
 
 /* ── LOGIN ── */
 
-function CentriTab({data,save}){
+function CentriTab({data,save,user}){
+  const limC=pianoLimits(user).centri;
   const [selC,setSelC]=useState(null);const [modal,setModal]=useState(null);const [form,setForm]=useState({});const [saving,setSaving]=useState(false);
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
   const close=()=>{setModal(null);setForm({});};
@@ -296,9 +323,10 @@ function CentriTab({data,save}){
     h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:'1rem'}},
       h('div',null,
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}},
-          h('h3',{style:{fontSize:'15px',fontWeight:500}},'Centri ('+data.centri.length+'/10)'),
-          h('button',{onClick:()=>{setForm({});setModal('centro');},className:'btn-g sm',disabled:data.centri.length>=10},'+ Aggiungi')
+          h('h3',{style:{fontSize:'15px',fontWeight:500}},'Centri ('+data.centri.length+(limC===Infinity?'':'/'+limC)+')'),
+          h('button',{onClick:()=>{setForm({});setModal('centro');},className:'btn-g sm',disabled:data.centri.length>=limC},'+ Aggiungi')
         ),
+        limC!==Infinity&&data.centri.length>=limC&&h('p',{style:{fontSize:'12px',color:'#A32D2D',marginBottom:'10px'}},'Hai raggiunto il limite di centri del piano Starter. Passa a Pro per continuare ad aggiungerne.'),
         h('div',{className:'card',style:{padding:0,overflowX:'auto',WebkitOverflowScrolling:'touch'}},
           data.centri.length===0?h('p',{style:{padding:'1rem',fontSize:'13px',color:'#666'}},'Nessun centro.'):
           h('table',{className:'tbl'},
@@ -400,7 +428,8 @@ function CentriTab({data,save}){
 }
 
 /* ── DIPENDENTI ── */
-function DipendentiTab({data,save}){
+function DipendentiTab({data,save,user}){
+  const limD=pianoLimits(user).dipendenti;
   const [modal,setM]=useState(false);const [form,setForm]=useState({});const [saving,setSaving]=useState(false);
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
   const close=()=>{setM(false);setForm({});};
@@ -409,9 +438,10 @@ function DipendentiTab({data,save}){
   const sorted=[...data.dipendenti].sort((a,b)=>(a.cognome||'').localeCompare(b.cognome||''));
   return h('div',null,
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}},
-      h('h3',{style:{fontSize:'15px',fontWeight:500}},'Dipendenti ('+data.dipendenti.length+')'),
-      h('button',{onClick:()=>{setForm({});setM(true);},className:'btn-g'},'+ Aggiungi')
+      h('h3',{style:{fontSize:'15px',fontWeight:500}},'Dipendenti ('+data.dipendenti.length+(limD===Infinity?'':'/'+limD)+')'),
+      h('button',{onClick:()=>{setForm({});setM(true);},className:'btn-g',disabled:data.dipendenti.length>=limD},'+ Aggiungi')
     ),
+    limD!==Infinity&&data.dipendenti.length>=limD&&h('p',{style:{fontSize:'12px',color:'#A32D2D',marginBottom:'10px'}},'Hai raggiunto il limite di dipendenti del piano Starter. Passa a Pro per continuare ad aggiungerne.'),
     h('div',{className:'card',style:{padding:0,overflowX:'auto',WebkitOverflowScrolling:'touch'}},
       data.dipendenti.length===0?h('p',{style:{padding:'1rem',fontSize:'13px',color:'#666'}},'Nessun dipendente.'):
       h('table',{className:'tbl'},
@@ -567,14 +597,6 @@ function LavForm({data,save,centroId,onDone,adminMode}){
   const INIT={data:'',settoreId:'',settoreIds:[],tipoId:'',dipendentiIds:[],oreMap:{},quantita:'',note:'',stato:'proposta',priorita:'',varietaId:''};
   const [form,setForm]=useState(INIT);const [err,setErr]=useState({});const [saving,setSaving]=useState(false);
   const F=k=>e=>setForm(f=>({...f,[k]:e.target.value}));
-  const tog=id=>setForm(f=>{
-    const inList=f.dipendentiIds.includes(id);
-    const newOreMap={...f.oreMap};
-    if(inList)delete newOreMap[id];
-    return{...f,dipendentiIds:inList?f.dipendentiIds.filter(x=>x!==id):[...f.dipendentiIds,id],oreMap:newOreMap};
-  });
-  const setOre=(id,v)=>setForm(f=>({...f,oreMap:{...f.oreMap,[id]:v}}));
-  const isCompleta=false;
   const er={borderColor:'#F7C1C1'};
   const submit=async()=>{
     const e={};
@@ -615,7 +637,7 @@ function LavForm({data,save,centroId,onDone,adminMode}){
       )
     ),
 
-    !isCompleta&&h('div',{style:{marginBottom:'14px'}},
+    h('div',{style:{marginBottom:'14px'}},
       h('label',{className:'lbl'},'Priorità'),
       h('div',{style:{display:'flex',gap:'6px',flexWrap:'wrap'}},
         [['','Nessuna'],['bassa','Bassa'],['media','Media'],['alta','Alta']].map(([val,label])=>h('label',{key:val,style:{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer',fontSize:'14px',padding:'6px 12px',borderRadius:'8px',border:'1px solid '+({'alta':'#F7C1C1','media':'#FAC775','bassa':'#C0DD97','':'#ccc'}[val]||'#ccc'),background:form.priorita===val?({'alta':'#FCEBEB','media':'#FAEEDA','bassa':'#EAF3DE','':'#f5f5f3'}[val]||'#f5f5f3'):'#fff',fontWeight:form.priorita===val?500:400}},
@@ -625,7 +647,7 @@ function LavForm({data,save,centroId,onDone,adminMode}){
       )
     ),
     h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'10px',marginBottom:'12px'}},
-      h('div',null,h('label',{className:'lbl'},isCompleta?'Data *':'Data prevista'),h('input',{type:'date',value:form.data,onChange:F('data'),style:err.d?er:{}})),
+      h('div',null,h('label',{className:'lbl'},'Data prevista'),h('input',{type:'date',value:form.data,onChange:F('data'),style:err.d?er:{}})),
       h('div',{style:{gridColumn:'1/-1'}},h('label',{className:'lbl'},'Settori (puoi sceglierne più di uno)'),
         settori.length===0
           ?h('p',{style:{fontSize:'13px',color:'#999',margin:'4px 0'}},effCentro?'Nessun settore in questo centro.':'Seleziona prima il centro.')
@@ -661,14 +683,7 @@ function LavForm({data,save,centroId,onDone,adminMode}){
     ),
     h('label',{className:'lbl'},'Quantità / misure'),
     h('input',{value:form.quantita,onChange:F('quantita'),placeholder:'Es. 200 piante, 3 filari...',style:{marginBottom:'12px'}}),
-    isCompleta&&h('div',null,
-      h('label',{className:'lbl',style:err.dip?{color:'#A32D2D'}:{}},'Dipendenti *'+(err.dip?' (seleziona almeno uno)':'')),
-      h(DipList,{data,checked:form.dipendentiIds,onToggle:tog,oreMap:form.oreMap,onOreChange:setOre,showOre:isCompleta,errBorder:err.dip}),
-      form.dipendentiIds.length>0&&form.ore&&h('p',{style:{fontSize:'12px',color:'#3B6D11',marginBottom:'10px'}},
-        '✓ '+form.dipendentiIds.length+' sel. → '+(form.dipendentiIds.length*parseFloat(form.ore)).toFixed(1)+'h totali'
-      )
-    ),
-    !isCompleta&&h('p',{style:{fontSize:'12px',color:'#888',marginBottom:'10px',fontStyle:'italic'}},'ℹ I dipendenti e le ore potranno essere assegnati in seguito, a lavoro completato.'),
+    h('p',{style:{fontSize:'12px',color:'#888',marginBottom:'10px',fontStyle:'italic'}},'ℹ I dipendenti e le ore potranno essere assegnati in seguito, a lavoro completato.'),
     h('label',{className:'lbl'},'Note'),
     h('textarea',{value:form.note,onChange:F('note'),rows:2,style:{marginBottom:'1.25rem'}}),
     h('div',{style:{display:'flex',gap:'10px',flexWrap:'wrap'}},
@@ -746,6 +761,18 @@ function ProposteTab({data,save,centroId,user}){
     const selSett=(form.settoreIds||[]).length?form.settoreIds:lavSettori(form);
     const updated={...form,settoreIds:selSett,settoreId:selSett[0]||'',data:form.dataConferma,stato:'confermata',confermataAt:new Date().toISOString()};
     await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===form.id?updated:l)});
+    const centro=(data.centri||[]).find(x=>x.id===updated.centroId);
+    const tipo=(data.tipi||[]).find(x=>x.id===updated.tipoId);
+    const settNomi=settoriNomi(updated,data.settori)||'—';
+    const msg='🌿 <b>'+user.tenant.nome+' — Lavorazione confermata</b>\n\n'+
+      '📍 <b>Centro:</b> '+(centro?.nome||'—')+'\n'+
+      '🌱 <b>Settori:</b> '+settNomi+'\n'+
+      '🔧 <b>Tipo:</b> '+(tipo?.nome||'—')+'\n'+
+      '📅 <b>Data:</b> '+updated.data+'\n'+
+      (updated.quantita?'📦 <b>Quantità:</b> '+updated.quantita+'\n':'')+
+      (updated.note?'📝 <b>Note:</b> '+updated.note+'\n':'')+
+      '\n🔗 <a href="https://app.vivaioapp.it/">Apri gestionale</a>';
+    await notifyResponsabili(updated.centroId, msg, data);
     setSaving(false);close();
   };
 
@@ -1205,7 +1232,8 @@ function TutteLavTab({data,refresh}){
 }
 
 /* ── REPORT ── */
-function ReportTab({data,centroId}){
+function ReportTab({data,centroId,user}){
+  const excelOk=pianoOf(user)!=='starter';
   const [f,setF]=useState({da:'',a:'',tipoId:'',dipId:'',settoreId:'',centroId:centroId||''});
   const [view,setView]=useState('tabella'); // tabella | riepilogo
 
@@ -1321,7 +1349,9 @@ function ReportTab({data,centroId}){
       ),
       h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
         h('button',{onClick:()=>setF({da:'',a:'',tipoId:'',dipId:'',settoreId:'',centroId:centroId||''}),className:'btn-n',style:{fontSize:'13px',padding:'5px 12px'}},'✕ Azzera filtri'),
-        h('button',{onClick:exportXls,className:'btn-g',style:{display:'flex',alignItems:'center',gap:'6px'}},'⬇ Scarica Excel')
+        excelOk
+          ?h('button',{onClick:exportXls,className:'btn-g',style:{display:'flex',alignItems:'center',gap:'6px'}},'⬇ Scarica Excel')
+          :h('a',{href:'mailto:info@vivaioapp.it?subject=Upgrade%20a%20Pro',className:'btn-n',style:{display:'flex',alignItems:'center',gap:'6px',textDecoration:'none',fontSize:'13px'},title:'Export Excel disponibile dal piano Pro'},'🔒 Excel — solo piano Pro')
       )
     ),
 
@@ -1492,12 +1522,14 @@ function AdminApp({data,save,user,logout,refresh}){
 
       // TAB RICHIESTE
       tab==='richieste'&&h('div',null,
-        nUrgenti>0&&h('div',{style:{background:'#E24B4A',color:'#fff',borderRadius:'10px',padding:'10px 14px',marginBottom:'10px',display:'flex',alignItems:'center',gap:'10px'}},
-          h('span',{style:{fontSize:'20px'}},'🚨'),
-          h('span',{style:{fontWeight:600,fontSize:'14px'}},nUrgenti+' richiesta'+(nUrgenti>1?'e':'')+' urgente'+(nUrgenti>1?'':'')+' in attesa!')
-        ),
-        centroFilter,
-        h(RichiesteTab,{data,save,user,isAdmin:true,centroId})
+        pianoOf(user)==='starter'?h(UpgradeLock,{feature:'Le richieste in tempo reale'}):h('div',null,
+          nUrgenti>0&&h('div',{style:{background:'#E24B4A',color:'#fff',borderRadius:'10px',padding:'10px 14px',marginBottom:'10px',display:'flex',alignItems:'center',gap:'10px'}},
+            h('span',{style:{fontSize:'20px'}},'🚨'),
+            h('span',{style:{fontWeight:600,fontSize:'14px'}},nUrgenti+' richiesta'+(nUrgenti>1?'e':'')+' urgente'+(nUrgenti>1?'':'')+' in attesa!')
+          ),
+          centroFilter,
+          h(RichiesteTab,{data,save,user,isAdmin:true,centroId})
+        )
       ),
 
       // TAB CONFERMATE
@@ -1545,9 +1577,9 @@ function AdminApp({data,save,user,logout,refresh}){
         tab==='inserisci'&&h(LavForm,{data,save,centroId:null,onDone:()=>setOk('✓ Lavorazione inserita!'),adminMode:true}),
         tab==='completate'&&h(CompletateTab,{key:'comp_'+selCentroAdmin,data,save,centroId}),
         tab==='tutte'&&h(TutteLavTab,{data,refresh}),
-        tab==='report'&&h(ReportTab,{data,centroId:null}),
-        tab==='centri'&&h(CentriTab,{data,save}),
-        tab==='dip'&&h(DipendentiTab,{data,save}),
+        tab==='report'&&h(ReportTab,{data,centroId:null,user}),
+        tab==='centri'&&h(CentriTab,{data,save,user}),
+        tab==='dip'&&h(DipendentiTab,{data,save,user}),
         tab==='tipi'&&h(TipiTab,{data,save}),
         tab==='utenti'&&h(UtentiTab,{data,save}),
             tab==='impostazioni'&&h(ImpostazioniTab,{user,data,save})
@@ -1623,7 +1655,7 @@ function RichiesteTab({data,save,user,isAdmin,centroId}){
       (form.dataRichiesta?`📅 <b>Data:</b> ${form.dataRichiesta}\n`:'')+
       (form.note?`💬 <b>Note:</b> ${form.note}\n`:'')+
       `\n🔗 <a href="https://app.vivaioapp.it/">Apri gestionale → Richieste</a>`;
-    for(const cid of [].concat(TG_ADMIN_CHATID))await tgSend(cid, msg);
+    await notifyAdmin(msg, data);
     setSaving(false);close();
   };
 
@@ -2008,7 +2040,7 @@ function RespApp({data,save,user,logout}){
       ),
 
       // TAB: RICHIESTE
-      tab==='richieste'&&h(RichiesteTab,{data,save,user,isAdmin:false,centroId:selId}),
+      tab==='richieste'&&(pianoOf(user)==='starter'?h(UpgradeLock,{feature:'Le richieste in tempo reale'}):h(RichiesteTab,{data,save,user,isAdmin:false,centroId:selId})),
 
       // TAB: ALTRO (settori, completate, report)
       tab==='altro'&&h('div',{style:{display:'flex',flexDirection:'column',gap:'10px'}},
@@ -2032,7 +2064,7 @@ function RespApp({data,save,user,logout}){
         ),
         tab==='settori'&&h(RespSettoriTab,{data,save,centroId:selId}),
         tab==='completate'&&h(CompletateTab,{data,save,centroId:selId}),
-        tab==='report'&&h(ReportTab,{data,centroId:selId}),
+        tab==='report'&&h(ReportTab,{data,centroId:selId,user}),
         tab==='impostazioni'&&h(ImpostazioniTab,{user,data,save})
       )
     ),
@@ -2074,6 +2106,34 @@ function App(){
   const [user,setUser]=useState(()=>{
     try{const u=sessionStorage.getItem('va_user');return u?JSON.parse(u):null;}catch{return null;}
   });
+  const [billingInterval,setBillingInterval]=useState('monthly');
+  const [checkoutBusy,setCheckoutBusy]=useState(false);
+  async function avviaCheckout(piano,interval){
+    setCheckoutBusy(true);
+    try{
+      const r=await fetch(SB+'/functions/v1/stripe-checkout',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},body:JSON.stringify({tenantId:user.tenant.id,piano,interval})});
+      const j=await r.json();
+      if(j.url) window.location.href=j.url;
+      else{ alert(j.error||'Errore avvio pagamento. Riprova o scrivi a support@vivaioapp.it'); setCheckoutBusy(false); }
+    }catch(e){ alert('Errore di rete. Riprova o scrivi a support@vivaioapp.it'); setCheckoutBusy(false); }
+  }
+
+  // Al ritorno da Stripe dopo un pagamento riuscito, il tenant salvato in sessione è ancora quello
+  // di prima del pagamento: lo ricarichiamo per riflettere subito piano/stato abbonamento aggiornati.
+  useEffect(()=>{
+    if(!user||!user.tenant) return;
+    if(!window.location.search.includes('checkout=success')) return;
+    (async()=>{
+      const r=await fetch(SB+'/rest/v1/tenants?id=eq.'+user.tenant.id,{headers:SBH});
+      const [freshTenant]=await r.json();
+      if(freshTenant){
+        const updated={...user,tenant:freshTenant};
+        try{ sessionStorage.setItem('va_tenant',JSON.stringify(freshTenant)); sessionStorage.setItem('va_user',JSON.stringify(updated)); }catch{}
+        setUser(updated);
+      }
+      window.history.replaceState({},'',window.location.pathname);
+    })();
+  },[]);
 
   useEffect(()=>{
     if(!user||!user.tenant){setLoading(false);return;}
@@ -2099,8 +2159,8 @@ function App(){
         const nd={...ref.current,lavorazioni:normLav,richieste:richieste||[]};
         setData(nd);ref.current=nd;
 
-        // Reminder urgenti ogni 30 minuti (solo admin)
-        if(user.ruolo==='admin'){
+        // Reminder urgenti ogni 30 minuti (solo admin, feature Pro)
+        if(user.ruolo==='admin'&&pianoOf(user)!=='starter'){
           const now=Date.now();
           if(now-lastReminderRef.current>=30*60*1000){
             const urgenti=(richieste||[]).filter(r=>r.stato==='pendente'&&r.urgente);
@@ -2110,15 +2170,14 @@ function App(){
                 const centro=(nd.centri||[]).find(x=>x.id===r.centroId);
                 return '🚨 '+(centro?.nome||'—')+' — '+r.descrizione;
               }).join('\n');
-              tgSend(null&&
-                `⏰ <b>Reminder ${user.tenant.nome}</b>
+              const remMsg=`⏰ <b>Reminder ${user.tenant.nome}</b>
 
 Hai ${urgenti.length} richiesta${urgenti.length>1?'e':''} urgente${urgenti.length>1?'':''} in attesa di risposta:
 
 ${lines}
 
-🔗 <a href="https://app.vivaioapp.it/">Apri gestionale → Richieste</a>`
-              );
+🔗 <a href="https://app.vivaioapp.it/">Apri gestionale → Richieste</a>`;
+              notifyAdmin(remMsg, nd);
             }
           }
         }
@@ -2186,7 +2245,8 @@ ${lines}
       username:item.user||item.username||'',
       pass:item.pass||'',
       ruolo:item.ruolo||'responsabile',
-      centroIds:item.centroIds||[]
+      centroIds:item.centroIds||[],
+      tgChatId:item.tgChatId||''
     };
     if(tbl==='centri')return{
       id:item.id,
@@ -2239,14 +2299,32 @@ ${lines}
         )
       );
     }
-    if(daysLeft <= 0){
+    const abbonamentoAttivo=['active','trialing','past_due'].includes(user.tenant.subscriptionStatus);
+    if(daysLeft <= 0 && !abbonamentoAttivo){
       return h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#f3f4f2',padding:'1.5rem'}},
         h('div',{style:{background:'white',borderRadius:'16px',padding:'2.5rem',maxWidth:'420px',textAlign:'center',boxShadow:'0 4px 24px rgba(0,0,0,0.1)'}},
           h('div',{style:{fontSize:'56px',marginBottom:'1rem'}},'🌱'),
           h('h2',{style:{fontSize:'20px',fontWeight:700,marginBottom:'8px'}},'Trial scaduto'),
           h('p',{style:{color:'#666',fontSize:'14px',lineHeight:1.6,marginBottom:'1.5rem'}},'Il tuo periodo di prova gratuita è terminato. Contattaci per attivare il piano e continuare a usare VivaioApp.'),
-          h('a',{href:'mailto:support@vivaioapp.it',style:{display:'block',background:'#3B6D11',color:'white',padding:'12px 24px',borderRadius:'10px',textDecoration:'none',fontWeight:700,fontSize:'15px',marginBottom:'12px'}},'🚀 Attiva il piano'),
-          h('a',{href:'https://vivaioapp.it/#prezzi',style:{display:'block',background:'transparent',border:'2px solid #3B6D11',color:'#3B6D11',padding:'10px 24px',borderRadius:'10px',textDecoration:'none',fontWeight:600,fontSize:'14px',marginBottom:'12px'}},'Vedi i piani'),
+          (()=>{
+            const pianoAttuale=(user.tenant.piano==='enterprise')?'pro':(user.tenant.piano||'starter');
+            const prezzi={starter:{monthly:39,annual:390},pro:{monthly:79,annual:790}};
+            const p=prezzi[pianoAttuale];
+            return h('div',null,
+              user.tenant.piano==='enterprise'
+                ?h('a',{href:'mailto:support@vivaioapp.it',style:{display:'block',background:'#3B6D11',color:'white',padding:'12px 24px',borderRadius:'10px',textDecoration:'none',fontWeight:700,fontSize:'15px',marginBottom:'12px'}},'🚀 Contattaci per riattivare')
+                :h('div',null,
+                  h('div',{style:{display:'flex',gap:'8px',justifyContent:'center',marginBottom:'14px'}},
+                    h('button',{onClick:()=>setBillingInterval('monthly'),style:{padding:'6px 14px',borderRadius:'8px',border:'1.5px solid '+(billingInterval==='monthly'?'#3B6D11':'#ddd'),background:billingInterval==='monthly'?'#EAF3DE':'white',color:'#1a1a1a',fontSize:'13px',fontWeight:600,cursor:'pointer'}},'Mensile'),
+                    h('button',{onClick:()=>setBillingInterval('annual'),style:{padding:'6px 14px',borderRadius:'8px',border:'1.5px solid '+(billingInterval==='annual'?'#3B6D11':'#ddd'),background:billingInterval==='annual'?'#EAF3DE':'white',color:'#1a1a1a',fontSize:'13px',fontWeight:600,cursor:'pointer'}},'Annuale — 2 mesi gratis')
+                  ),
+                  h('button',{onClick:()=>avviaCheckout(pianoAttuale,billingInterval),disabled:checkoutBusy,style:{width:'100%',background:'#3B6D11',color:'white',padding:'12px 24px',border:'none',borderRadius:'10px',fontWeight:700,fontSize:'15px',marginBottom:'12px',cursor:'pointer'}},
+                    checkoutBusy?'Attendere...':'🚀 Attiva '+pianoAttuale.charAt(0).toUpperCase()+pianoAttuale.slice(1)+' — €'+p[billingInterval]+(billingInterval==='monthly'?'/mese':'/anno')
+                  )
+                ),
+              h('a',{href:'https://vivaioapp.it/#prezzi',style:{display:'block',background:'transparent',border:'2px solid #3B6D11',color:'#3B6D11',padding:'10px 24px',borderRadius:'10px',textDecoration:'none',fontWeight:600,fontSize:'14px',marginBottom:'12px'}},'Vedi tutti i piani')
+            );
+          })(),
           h('button',{onClick:()=>{sessionStorage.removeItem('va_user');sessionStorage.removeItem('va_tenant');setUser(null);},style:{background:'transparent',border:'none',color:'#aaa',cursor:'pointer',fontSize:'13px'}},'Esci')
         )
       );
@@ -2303,6 +2381,17 @@ function ImpostazioniTab({user,data,save}){
   const [chatId,setChatId]=React.useState(user.tgChatId||'');
   const [okMsg,setOkMsg]=React.useState('');
   const [errMsg,setErrMsg]=React.useState('');
+  const [portalBusy,setPortalBusy]=React.useState(false);
+
+  const apriPortale=async()=>{
+    setPortalBusy(true);
+    try{
+      const r=await fetch(SB+'/functions/v1/stripe-portal',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+KEY,'apikey':KEY},body:JSON.stringify({tenantId:user.tenant.id})});
+      const j=await r.json();
+      if(j.url) window.location.href=j.url;
+      else{ alert(j.error||'Errore. Riprova o scrivi a support@vivaioapp.it'); setPortalBusy(false); }
+    }catch(e){ alert('Errore di rete. Riprova.'); setPortalBusy(false); }
+  };
 
   const salvaPassword=async()=>{
     setOkMsg('');setErrMsg('');
@@ -2324,6 +2413,19 @@ function ImpostazioniTab({user,data,save}){
   };
 
   return h('div',{style:{display:'flex',flexDirection:'column',gap:'16px'}},
+    h('div',{className:'card',style:{padding:'16px'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}},
+        h('span',{style:{fontSize:'20px'}},'💳'),
+        h('span',{style:{fontWeight:600,fontSize:'15px'}},'Abbonamento')
+      ),
+      h('p',{style:{fontSize:'13px',color:'#666',marginBottom:'12px'}},
+        'Piano attuale: ',h('b',{style:{color:'#3B6D11',textTransform:'capitalize'}},user.tenant.piano||'starter'),
+        user.tenant.billingInterval?(' · '+(user.tenant.billingInterval==='annual'?'fatturazione annuale':'fatturazione mensile')):''
+      ),
+      user.tenant.stripeCustomerId
+        ?h('button',{className:'btn-g',onClick:apriPortale,disabled:portalBusy,style:{width:'100%'}},portalBusy?'Apertura...':'Gestisci abbonamento →')
+        :h('p',{style:{fontSize:'12px',color:'#999'}},'Nessun abbonamento attivo su Stripe. Attivalo dalla schermata di fine prova, oppure scrivi a support@vivaioapp.it.')
+    ),
     h('div',{className:'card',style:{padding:'16px'}},
       h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px'}},
         h('span',{style:{fontSize:'20px'}},'🔑'),
