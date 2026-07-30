@@ -42,7 +42,7 @@ button{cursor:pointer;font-family:inherit}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .bar-bg{background:#eee;border-radius:4px;height:6px}
 .bar-fill{background:#3B6D11;border-radius:4px;height:6px}
-.topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 1rem;border-bottom:1px solid #e5e5e5;background:#fff;position:sticky;top:0;z-index:10}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 1rem;background:#2d4c1c;color:#fff;position:sticky;top:0;z-index:10}
 .success-box{background:#EAF3DE;border:1px solid #C0DD97;border-radius:8px;padding:10px 14px;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;color:#27500A;font-size:14px}
 .spin{display:inline-block;width:20px;height:20px;border:2px solid #ddd;border-top-color:#3B6D11;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -202,13 +202,13 @@ function TopBar({title,user,logout,extra}){
     h('div',{style:{display:'flex',alignItems:'center',gap:'6px',minWidth:0,flex:1}},
       h('img',{src:'vivaioapp-logo-cropped.svg',alt:'VivaioApp',style:{height:'40px',width:'auto',flexShrink:0}}),
       h('div',{style:{minWidth:0}},
-        h('div',{style:{fontWeight:600,fontSize:'14px',lineHeight:1.2}},user.tenant?.nome||'VivaioApp'),
-        h('div',{style:{fontSize:'12px',color:'#666',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},title)
+        h('div',{style:{fontWeight:600,fontSize:'14px',lineHeight:1.2,color:'#fff'}},user.tenant?.nome||'VivaioApp'),
+        h('div',{style:{fontSize:'12px',color:'rgba(255,255,255,.7)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},title)
       )
     ),
     h('div',{style:{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}},
       extra&&extra,
-      h('div',{style:{fontSize:'12px',color:'#888',maxWidth:'90px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},user.nome),
+      h('div',{style:{fontSize:'12px',color:'rgba(255,255,255,.7)',maxWidth:'90px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},user.nome),
       h('button',{onClick:logout,className:'btn-n',style:{padding:'6px 10px',fontSize:'13px',whiteSpace:'nowrap'}},'Esci')
     )
   );
@@ -1457,12 +1457,12 @@ function AdminApp({data,save,user,logout,refresh}){
       h('div',{style:{display:'flex',alignItems:'center',gap:'6px',flex:1,minWidth:0}},
         h('img',{src:'vivaioapp-logo-cropped.svg',alt:'VivaioApp',style:{height:'44px',width:'auto',flexShrink:0}}),
         h('div',{style:{minWidth:0}},
-          h('div',{style:{fontWeight:600,fontSize:'13px',lineHeight:1.2}},user.tenant.nome),
-          h('div',{style:{fontSize:'11px',color:'#888'}},'Admin')
+          h('div',{style:{fontWeight:600,fontSize:'13px',lineHeight:1.2,color:'#fff'}},user.tenant.nome),
+          h('div',{style:{fontSize:'11px',color:'rgba(255,255,255,.7)'}},'Admin')
         )
       ),
       h('div',{style:{display:'flex',gap:'8px',alignItems:'center'}},
-        h('button',{onClick:async()=>{await refresh();setOk('✓ Aggiornato!');setTimeout(()=>setOk(''),2000);},style:{background:'transparent',border:'1px solid #e5e5e5',borderRadius:'8px',padding:'5px 10px',fontSize:'13px',cursor:'pointer'}},'🔄'),
+        h('button',{onClick:async()=>{await refresh();setOk('✓ Aggiornato!');setTimeout(()=>setOk(''),2000);},style:{background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.3)',borderRadius:'8px',padding:'5px 10px',fontSize:'13px',cursor:'pointer'}},'🔄'),
         h('button',{onClick:logout,className:'btn-n',style:{padding:'5px 10px',fontSize:'13px'}},'Esci')
       )
     ),
@@ -1948,10 +1948,11 @@ function RespApp({data,save,user,logout}){
     // TopBar compatto
     h('div',{className:'topbar'},
       h('div',{style:{display:'flex',alignItems:'center',gap:'6px',flex:1,minWidth:0}},
-        ids.length>1&&h('button',{onClick:()=>{setSelId(null);setTab('confermate');},style:{background:'transparent',border:'none',fontSize:'20px',cursor:'pointer',padding:'4px',color:'#3B6D11'}},'‹'),
+        ids.length>1&&h('button',{onClick:()=>{setSelId(null);setTab('confermate');},style:{background:'transparent',border:'none',fontSize:'20px',cursor:'pointer',padding:'4px',color:'#fff'}},'‹'),
+        h('img',{src:'vivaioapp-logo-cropped.svg',alt:'VivaioApp',style:{height:'40px',width:'auto',flexShrink:0}}),
         h('div',{style:{minWidth:0}},
-          h('div',{style:{fontWeight:600,fontSize:'14px',lineHeight:1.2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},centro?.nome||''),
-          h('div',{style:{fontSize:'11px',color:'#888'}},user.nome)
+          h('div',{style:{fontWeight:600,fontSize:'14px',lineHeight:1.2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#fff'}},centro?.nome||''),
+          h('div',{style:{fontSize:'11px',color:'rgba(255,255,255,.7)'}},user.nome)
         )
       ),
       h('button',{onClick:logout,className:'btn-n',style:{padding:'5px 10px',fontSize:'13px'}},'Esci')
