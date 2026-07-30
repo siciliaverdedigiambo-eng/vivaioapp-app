@@ -849,52 +849,6 @@ function ProposteTab({data,save,centroId,user}){
   );
 }
 
-/* ── CONFERMATE TAB ── */
-function ConfermatTab({data,save,centroId,readOnly}){
-  const lav=(data.lavorazioni||[]).filter(l=>{
-    if(l.stato!=='confermata')return false;
-    if(centroId&&l.centroId!==centroId)return false;
-    return true;
-  }).sort((a,b)=>String(a.data||'').localeCompare(String(b.data||'')));
-
-  const riapri=async id=>{if(!confirm('Riportare come proposta?'))return;await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===id?{...l,stato:'proposta'}:l)});};
-  const del=async id=>{if(!confirm('Eliminare?'))return;await save({...data,lavorazioni:data.lavorazioni.filter(l=>l.id!==id)});};
-
-  return h('div',null,
-    lav.length===0
-      ?h('div',{className:'card'},h('p',{style:{fontSize:'14px',color:'#666'}},'Nessuna lavorazione confermata.'))
-      :h('div',{className:'card',style:{padding:0,overflowX:'auto',WebkitOverflowScrolling:'touch'}},
-        h('table',{className:'tbl'},
-          h('thead',null,h('tr',null,
-            h('th',null,'Data'),
-            !centroId&&h('th',null,'Centro'),
-            h('th',null,'Settore'),h('th',null,'Tipo'),
-            h('th',null,'Dipendenti'),h('th',null,'Quantità'),h('th',null,'Note'),
-            !readOnly&&h('th',{style:{width:'80px'}})
-          )),
-          h('tbody',null,lav.map(l=>{
-            const centro=(data.centri||[]).find(x=>x.id===l.centroId);
-            const tipo=(data.tipi||[]).find(x=>x.id===l.tipoId);
-            const nomi=(l.dipendentiIds||[]).map(id=>{const d=(data.dipendenti||[]).find(x=>x.id===id);return d?d.cognome:'?';}).join(', ');
-            return h('tr',{key:l.id,style:{background:'#f9fff5'}},
-              h('td',{style:{fontWeight:500}},l.data||'—'),
-              !centroId&&h('td',{style:{fontSize:'13px'}},centro?.nome||'—'),
-              h('td',null,settoriNomi(l,data.settori)||'—'),
-              h('td',null,tipo?.nome||'—'),
-              h('td',{style:{fontSize:'12px',color:'#666',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},nomi||h('span',{style:{color:'#bbb',fontStyle:'italic'}},'non assegnati')),
-              h('td',{style:{fontSize:'12px',color:'#666'}},l.quantita||'—'),
-              h('td',{style:{fontSize:'12px',color:'#666',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},l.note||'—'),
-              !readOnly&&h('td',null,h('div',{style:{display:'flex',gap:'4px'}},
-                h('button',{onClick:()=>riapri(l.id),className:'btn-n sm',title:'Riporta come proposta'},'↩'),
-                h('button',{onClick:()=>del(l.id),className:'btn-r sm'},'🗑')
-              ))
-            );
-          }))
-        )
-      )
-  );
-}
-
 /* ── DA FARE ── */
 function DaFareTab({data,save,centroId}){
   const [modal,setM]=useState(null);const [form,setForm]=useState({});const [saving,setSaving]=useState(false);
@@ -953,6 +907,7 @@ function DaFareTab({data,save,centroId}){
     setSaving(false);close();
   };
   const del=async id=>{if(!confirm('Eliminare?'))return;await save({...data,lavorazioni:data.lavorazioni.filter(l=>l.id!==id)});};
+  const riapri=async id=>{if(!confirm('Riportare come proposta?'))return;await save({...data,lavorazioni:data.lavorazioni.map(l=>l.id===id?{...l,stato:'proposta'}:l)});};
   const er={borderColor:'#F7C1C1'};
   const PLAB={alta:'ALTA',media:'MEDIA',bassa:'BASSA','':'—'};
   const PCOL={alta:'#E24B4A',media:'#EF9F27',bassa:'#639922','':'#ccc'};
@@ -1047,7 +1002,8 @@ function DaFareTab({data,save,centroId}){
               h('td',{style:{fontSize:'12px',color:'#666',maxWidth:'100px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},l.note||'—'),
               h('td',null,h('div',{style:{display:'flex',gap:'4px'}},
                 h('button',{onClick:()=>openCompleta(l),className:'btn-g sm',title:'Segna come completata'},'✓ Fine'),
-                h('button',{onClick:()=>openEdit(l),className:'btn-n sm'},'✏️'),
+                h('button',{onClick:()=>openEdit(l),className:'btn-n sm',title:'Modifica lavorazione'},'✏️'),
+                h('button',{onClick:()=>riapri(l.id),className:'btn-n sm',title:'Riporta come proposta'},'↩'),
                 h('button',{onClick:()=>del(l.id),className:'btn-r sm'},'🗑')
               ))
             );
@@ -1535,7 +1491,7 @@ function AdminApp({data,save,user,logout,refresh}){
       // TAB CONFERMATE
       tab==='confermate'&&h('div',null,
         centroFilter,
-        h(ConfermatTab,{key:'conf_'+selCentroAdmin,data,save,centroId})
+        h(DaFareTab,{key:'conf_'+selCentroAdmin,data,save,centroId})
       ),
 
       // TAB ALTRO — menu a card
