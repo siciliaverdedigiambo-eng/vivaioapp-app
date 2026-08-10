@@ -7,16 +7,16 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;font-size:15px;color:#1a1a1a;background:#f3f4f2}
-input,select,textarea{font-family:inherit;font-size:16px;padding:9px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;width:100%}
+input,select,textarea{font-family:inherit;font-size:16px;padding:13px 14px;border:1px solid #ccc;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;width:100%}
 input:focus,select:focus,textarea:focus{border-color:#3B6D11;box-shadow:0 0 0 2px rgba(59,109,17,.1)}
-input[type=checkbox]{width:18px;height:18px;accent-color:#3B6D11;flex-shrink:0}
+input[type=checkbox]{width:20px;height:20px;accent-color:#3B6D11;flex-shrink:0}
 textarea{resize:vertical}
 button{cursor:pointer;font-family:inherit}
-.btn-g{background:#3B6D11;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:15px;font-weight:500}
+.btn-g{background:#3B6D11;color:#fff;border:none;border-radius:8px;padding:14px 18px;font-size:15px;font-weight:500;min-height:48px}
 .btn-g:disabled{opacity:.5;cursor:default}
-.btn-n{background:#fff;color:#1a1a1a;border:1px solid #ccc;border-radius:8px;padding:10px 16px;font-size:15px}
+.btn-n{background:#fff;color:#1a1a1a;border:1px solid #ccc;border-radius:8px;padding:13px 16px;font-size:15px;min-height:48px}
 .btn-r{background:#fff;color:#A32D2D;border:1px solid #F7C1C1;border-radius:8px;padding:7px 12px;font-size:13px}
-.sm{padding:6px 10px!important;font-size:13px!important}
+.sm{padding:6px 10px!important;font-size:13px!important;min-height:auto!important}
 .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:1rem}
 /* Tables: horizontal scroll on mobile */
 .tbl-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -589,6 +589,26 @@ function DipList({data,checked,onToggle,oreMap,onOreChange,showOre,errBorder}){
   );
 }
 
+/* ── DATA RAPIDA (Oggi/Domani + calendario) ── */
+function QuickDate({value,onChange,errStyle}){
+  const iso=d=>d.toISOString().slice(0,10);
+  const today=new Date();
+  const todayStr=iso(today);
+  const tom=new Date(today);tom.setDate(tom.getDate()+1);
+  const tomStr=iso(tom);
+  const chip=(label,val)=>{
+    const active=value===val;
+    return h('button',{type:'button',onClick:()=>onChange(val),style:{padding:'8px 14px',borderRadius:'8px',border:'1px solid '+(active?'#3B6D11':'#ccc'),background:active?'#EAF3DE':'#fff',color:'#1a1a1a',fontSize:'13px',fontWeight:active?600:400,cursor:'pointer',minHeight:'40px'}},label);
+  };
+  return h('div',null,
+    h('div',{style:{display:'flex',gap:'6px',marginBottom:'6px'}},
+      chip('Oggi',todayStr),
+      chip('Domani',tomStr)
+    ),
+    h('input',{type:'date',value:value||'',onChange:e=>onChange(e.target.value),style:errStyle||{}})
+  );
+}
+
 /* ── FORM LAVORAZIONE ── */
 function LavForm({data,save,centroId,onDone,adminMode}){
   const [selCentro,setSelCentro]=useState(centroId||'');
@@ -647,7 +667,7 @@ function LavForm({data,save,centroId,onDone,adminMode}){
       )
     ),
     h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'10px',marginBottom:'12px'}},
-      h('div',null,h('label',{className:'lbl'},'Data prevista'),h('input',{type:'date',value:form.data,onChange:F('data'),style:err.d?er:{}})),
+      h('div',null,h('label',{className:'lbl'},'Data prevista'),h(QuickDate,{value:form.data,onChange:v=>setForm(f=>({...f,data:v})),errStyle:err.d?er:{}})),
       h('div',{style:{gridColumn:'1/-1'}},h('label',{className:'lbl'},'Settori (puoi sceglierne più di uno)'),
         settori.length===0
           ?h('p',{style:{fontSize:'13px',color:'#999',margin:'4px 0'}},effCentro?'Nessun settore in questo centro.':'Seleziona prima il centro.')
@@ -1723,12 +1743,12 @@ function RichiesteTab({data,save,user,isAdmin,centroId}){
 
       form.tipoRichiesta==='personale'&&h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}},
         h('div',null,h('label',{className:'lbl'},'N. dipendenti richiesti *'),h('input',{type:'number',min:'1',value:form.nDipendenti||'',onChange:F('nDipendenti'),placeholder:'Es. 3'})),
-        h('div',null,h('label',{className:'lbl'},'Data'),h('input',{type:'date',value:form.dataRichiesta||'',onChange:F('dataRichiesta')}))
+        h('div',null,h('label',{className:'lbl'},'Data'),h(QuickDate,{value:form.dataRichiesta||'',onChange:v=>setForm(f=>({...f,dataRichiesta:v}))}))
       ),
 
       form.tipoRichiesta!=='personale'&&h('div',{style:{marginBottom:'12px'}},
         h('label',{className:'lbl'},'Data in cui serve'),
-        h('input',{type:'date',value:form.dataRichiesta||'',onChange:F('dataRichiesta')})
+        h(QuickDate,{value:form.dataRichiesta||'',onChange:v=>setForm(f=>({...f,dataRichiesta:v}))})
       ),
 
       h('label',{className:'lbl'},'Note aggiuntive'),
